@@ -7,7 +7,7 @@ export default function Home() {
   const [form, setForm] = useState({ data: '', hora_inicio: '', hora_fim: '', rota: '' });
   const [filtro, setFiltro] = useState({ inicio: '', fim: '' });
   const [loading, setLoading] = useState(false);
-  const [editandoId, setEditandoId] = useState<number | null>(null); // Controla se estamos editando
+  const [editandoId, setEditandoId] = useState<number | null>(null);
   
   const dataAtual = new Date();
   const mesAtual = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
@@ -31,7 +31,6 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     try {
-      // Se tiver editando, usa PUT. Se for novo, usa POST.
       const metodo = editandoId ? 'PUT' : 'POST';
       const corpoDaRequisicao = editandoId ? { id: editandoId, ...form } : form;
 
@@ -45,7 +44,7 @@ export default function Home() {
         const errorData = await res.json();
         alert(`Erro ao salvar: ${errorData.error}`);
       } else {
-        cancelarEdicao(); // Limpa o form e sai do modo de edição
+        cancelarEdicao();
         carregarDados();
       }
     } catch (err) {
@@ -54,9 +53,7 @@ export default function Home() {
     setLoading(false);
   };
 
-  // Preenche o formulário com os dados do registro clicado
   const iniciarEdicao = (reg: any) => {
-    // Formata a data para o formato YYYY-MM-DD que o input type="date" exige
     const dataFormatada = reg.data ? reg.data.substring(0, 10) : '';
     setForm({ 
       data: dataFormatada, 
@@ -65,16 +62,14 @@ export default function Home() {
       rota: reg.rota 
     });
     setEditandoId(reg.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Rola a tela para o topo
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Limpa o formulário
   const cancelarEdicao = () => {
     setForm({ data: '', hora_inicio: '', hora_fim: '', rota: '' });
     setEditandoId(null);
   };
 
-  // Exclui um registro
   const deletarRegistro = async (id: number) => {
     if (confirm('Tem certeza que deseja excluir esta rota permanentemente?')) {
       await fetch(`/api/horas?id=${id}`, { method: 'DELETE' });
@@ -130,7 +125,6 @@ export default function Home() {
           <h1 className="text-2xl font-bold tracking-tight">Registro de Horas Extras</h1>
         </header>
 
-        {/* Formulário - Muda de cor se estiver editando */}
         <section className={`p-6 rounded-2xl shadow-sm border transition-colors ${editandoId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}>
           <div className="flex justify-between items-center mb-4">
             <h2 className={`text-lg font-semibold ${editandoId ? 'text-amber-800' : 'text-slate-700'}`}>
@@ -234,7 +228,6 @@ export default function Home() {
                     </div>
                   </div>
                   
-                  {/* Botões de Ação */}
                   <div className="flex items-center gap-2 self-end sm:self-auto">
                     <button onClick={() => iniciarEdicao(reg)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Editar">
                       <Pencil size={18} />
