@@ -3,21 +3,11 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // Apaga a tabela antiga se existir
-    await sql`DROP TABLE IF EXISTS horas_extras;`;
+    // Tenta adicionar a coluna. Se ela já existir, vai dar um erro inofensivo.
+    await sql`ALTER TABLE horas_extras ADD COLUMN IF NOT EXISTS user_email VARCHAR(255);`;
     
-    // Cria a nova tabela
-    await sql`
-      CREATE TABLE horas_extras (
-        id SERIAL PRIMARY KEY,
-        data DATE NOT NULL,
-        hora_inicio TEXT NOT NULL,
-        hora_fim TEXT NOT NULL,
-        rota TEXT NOT NULL
-      );
-    `;
-    return NextResponse.json({ message: 'Banco atualizado com novos campos de hora!' }, { status: 200 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Erro ao criar tabela' }, { status: 500 });
+    return NextResponse.json({ message: 'Sucesso! A coluna user_email foi criada (ou já existia) no banco de dados correto.' });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Erro ao tentar criar coluna: ' + error.message });
   }
 }

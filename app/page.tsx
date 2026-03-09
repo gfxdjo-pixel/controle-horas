@@ -1,8 +1,12 @@
 'use client';
+
 import { useState, useEffect } from 'react';
-import { Clock, Route, Calendar, BarChart3, Pencil, Trash2, X } from 'lucide-react';
+import { useSession, signIn, signOut } from "next-auth/react";
+import { Clock, Route, Calendar, BarChart3, Pencil, Trash2, X, LogOut } from 'lucide-react';
 
 export default function Home() {
+  const { data: session, status } = useSession(); // Verifica quem está logado na hora
+  
   const [registros, setRegistros] = useState([]);
   const [form, setForm] = useState({ data: '', hora_inicio: '', hora_fim: '', rota: '' });
   const [filtro, setFiltro] = useState({ inicio: '', fim: '' });
@@ -25,7 +29,11 @@ export default function Home() {
     }
   };
 
-  useEffect(() => { carregarDados(); }, [filtro]);
+  useEffect(() => { 
+    if (session) {
+      carregarDados(); 
+    }
+  }, [filtro, session]); // Só carrega os dados se a pessoa estiver logada
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,13 +124,54 @@ export default function Home() {
   const diasOrdenados = Object.entries(resumoPorDia).sort((a: any, b: any) => a[0].localeCompare(b[0]));
   const totalMinutosMes = diasOrdenados.reduce((total, [, mins]: any) => total + mins, 0);
 
+  // --- BARREIRAS DE ACESSO --- //
+
+  // 1. Tela de Carregamento
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-medium">
+        Carregando painel...
+      </div>
+    );
+  }
+
+  // 2. Tela de Login (Se não estiver logado)
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center max-w-md w-full">
+          <Clock className="text-blue-600 mx-auto mb-4" size={48} />
+          <h1 className="text-2xl font-bold text-slate-800 mb-2">Acesso Restrito</h1>
+          <p className="text-slate-500 mb-8">Faça login com seu e-mail para registrar as rotas.</p>
+          <button 
+            onClick={() => signIn('google')} 
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors"
+          >
+            Entrar com Google
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Sistema Principal (Se passou pelo login)
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
         
-        <header className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3">
-          <Clock className="text-blue-600" size={28} />
-          <h1 className="text-2xl font-bold tracking-tight">Registro de Horas Extras</h1>
+        <header className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Clock className="text-blue-600" size={28} />
+            <h1 className="text-2xl font-bold tracking-tight">Registro de Horas Extras</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium text-slate-600 hidden sm:block">
+              Olá, {session?.user?.name?.split(' ')[0]}
+            </span>
+            <button onClick={() => signOut()} className="text-slate-500 hover:text-red-600 flex items-center gap-2 text-sm bg-slate-50 px-4 py-2 rounded-lg transition-colors border border-slate-100">
+              <LogOut size={16} /> Sair
+            </button>
+          </div>
         </header>
 
         <section className={`p-6 rounded-2xl shadow-sm border transition-colors ${editandoId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}>
