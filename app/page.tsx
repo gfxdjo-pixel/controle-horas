@@ -1,8 +1,3 @@
-return (
-    <div className="bg-red-500 text-white p-10 text-center text-4xl">
-        TESTE DE CARREGAMENTO (ESTOU FUNCIONANDO!)
-    </div>
-);
 'use client';
 
 import { useState, useEffect } from 'react';
