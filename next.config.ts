@@ -1,13 +1,6 @@
-import withPWAInit from "@ducanh2912/next-pwa";
-
-const withPWA = withPWAInit({
-  dest: "public",
-  disable: process.env.NODE_ENV === "development", // Só ativa o PWA quando for pro Vercel
-});
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Se você tinha alguma configuração aqui antes, ela continua igual
+  turbopack: {}, // Isso ajuda a silenciar o erro de compilação
 };
 
-export default withPWA(nextConfig);
+export default nextConfig;
