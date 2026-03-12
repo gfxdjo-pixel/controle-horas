@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useSession, signIn, signOut } from "next-auth/react";
-import { Clock, Route, Calendar, BarChart3, Pencil, Trash2, X, LogOut } from 'lucide-react';
+import { Clock, Route, Calendar, BarChart3, Pencil, Trash2, X, LogOut, FileDown, Users } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import Link from 'next/link';
 
 export default function Home() {
   const { data: session, status } = useSession(); // Verifica quem está logado na hora
@@ -33,7 +36,7 @@ export default function Home() {
     if (session) {
       carregarDados(); 
     }
-  }, [filtro, session]); // Só carrega os dados se a pessoa estiver logada
+  }, [filtro, session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,9 +127,40 @@ export default function Home() {
   const diasOrdenados = Object.entries(resumoPorDia).sort((a: any, b: any) => a[0].localeCompare(b[0]));
   const totalMinutosMes = diasOrdenados.reduce((total, [, mins]: any) => total + mins, 0);
 
-  // --- BARREIRAS DE ACESSO --- //
+  // --- FUNÇÃO EXPORTAR PDF --- //
+  const exportarPDF = () => {
+    const doc = new jsPDF();
+    
+    doc.setFontSize(18);
+    doc.text('Relatório de Horas Extras', 14, 22);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Colaborador: ${session?.user?.name}`, 14, 30);
+    doc.text(`Mês de Referência: ${mesResumo}`, 14, 36);
+    doc.text(`Total Acumulado: ${formatarMinutosParaHoras(totalMinutosMes)}`, 14, 42);
 
-  // 1. Tela de Carregamento
+    const colunas = ["Data", "Início", "Fim", "Duração", "Rota / Observação"];
+    const linhas = registrosDoMes.map((reg: any) => [
+      formatarData(reg.data),
+      reg.hora_inicio,
+      reg.hora_fim,
+      calcularDuracao(reg.hora_inicio, reg.hora_fim),
+      reg.rota
+    ]);
+
+    autoTable(doc, {
+      startY: 50,
+      head: [colunas],
+      body: linhas,
+      theme: 'grid',
+      headStyles: { fillColor: [37, 99, 235] },
+      styles: { fontSize: 9 },
+    });
+
+    doc.save(`Horas_Extras_${session?.user?.name}_${mesResumo}.pdf`);
+  };
+
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-medium">
@@ -135,7 +169,6 @@ export default function Home() {
     );
   }
 
-  // 2. Tela de Login (Se não estiver logado)
   if (!session) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -154,7 +187,6 @@ export default function Home() {
     );
   }
 
-  // 3. Sistema Principal (Se passou pelo login)
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -165,6 +197,16 @@ export default function Home() {
             <h1 className="text-2xl font-bold tracking-tight">Registro de Horas Extras</h1>
           </div>
           <div className="flex items-center gap-4">
+            {/* BOTÃO MASTER - APARECE APENAS PARA O SEU E-MAIL */}
+            {session?.user?.email === 'gfxdjo@gmail.com' && (
+              <Link 
+                href="/admin" 
+                className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-black transition-all shadow-md"
+              >
+                <Users size={16} /> Painel Master
+              </Link>
+            )}
+
             <span className="text-sm font-medium text-slate-600 hidden sm:block">
               Olá, {session?.user?.name?.split(' ')[0]}
             </span>
@@ -224,7 +266,20 @@ export default function Home() {
               <BarChart3 className="text-emerald-500" size={24} />
               <h2 className="text-lg font-semibold">Fechamento Mensal</h2>
             </div>
-            <input type="month" value={mesResumo} onChange={e => setMesResumo(e.target.value)} className="p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <input 
+                type="month" 
+                value={mesResumo} 
+                onChange={e => setMesResumo(e.target.value)} 
+                className="p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white" 
+              />
+              <button 
+                onClick={exportarPDF}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                <FileDown size={18} /> Exportar PDF
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
