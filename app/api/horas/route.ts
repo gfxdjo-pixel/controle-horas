@@ -3,18 +3,40 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from "./../auth/[...nextauth]/route";
 
-// ... (mantenha os blocos GET, POST e DELETE que já temos)
-
-export async function PUT(req: Request) {
+// LISTAR REGISTROS (GET)
+export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    const result = await sql`SELECT * FROM horas_extras WHERE user_email = ${session.user?.email} ORDER BY data DESC`;
+    return NextResponse.json(result.rows);
+  } catch (error: any) { 
+    return NextResponse.json({ error: error.message }, { status: 500 }); 
+  }
+}
 
-    const body = await req.json();
-    const { id, data, hora_inicio, hora_fim, rota, numero_van, km_inicial, km_final } = body;
+// CRIAR NOVO REGISTRO (POST)
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  try {
+    const { data, hora_inicio, hora_fim, rota, numero_van, km_inicial, km_final } = await req.json();
+    await sql`
+      INSERT INTO horas_extras (data, hora_inicio, hora_fim, rota, user_email, numero_van, km_inicial, km_final) 
+      VALUES (${data}, ${hora_inicio}, ${hora_fim}, ${rota}, ${session.user?.email}, ${numero_van}, ${km_inicial}, ${km_final})
+    `;
+    return NextResponse.json({ message: 'Salvo com sucesso' });
+  } catch (error: any) { 
+    return NextResponse.json({ error: error.message }, { status: 500 }); 
+  }
+}
 
-    if (!id) return NextResponse.json({ error: 'ID ausente para edição' }, { status: 400 });
-
+// EDITAR REGISTRO EXISTENTE (PUT)
+export async function PUT(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  try {
+    const { id, data, hora_inicio, hora_fim, rota, numero_van, km_inicial, km_final } = await req.json();
     await sql`
       UPDATE horas_extras 
       SET data = ${data}, 
@@ -24,14 +46,26 @@ export async function PUT(req: Request) {
           numero_van = ${numero_van}, 
           km_inicial = ${km_inicial}, 
           km_final = ${km_final}
-      WHERE id = ${parseInt(id)} 
-      AND user_email = ${session.user?.email}
+      WHERE id = ${Number(id)} AND user_email = ${session.user?.email}
     `;
-
     return NextResponse.json({ message: 'Atualizado com sucesso' });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: any) { 
+    return NextResponse.json({ error: error.message }, { status: 500 }); 
   }
 }
 
-// Re-insira os outros métodos aqui para garantir que o arquivo esteja completo
+// DELETAR REGISTRO (DELETE)
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+
+  try {
+    await sql`DELETE FROM horas_extras WHERE id = ${Number(id)} AND user_email = ${session.user?.email}`;
+    return NextResponse.json({ message: 'Excluído!' });
+  } catch (error: any) { 
+    return NextResponse.json({ error: error.message }, { status: 500 }); 
+  }
+}
