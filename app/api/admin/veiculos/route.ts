@@ -10,19 +10,27 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { numero_van, placa, nome, media } = await req.json();
-    
-    // O comando ON CONFLICT permite que, se o numero_van já existir, 
-    // o banco apenas atualize os outros dados (EDITAR)
-    await sql`
-      INSERT INTO veiculos (numero_van, placa, nome_identificacao, media_consumo)
-      VALUES (${numero_van}, ${placa}, ${nome}, ${media})
-      ON CONFLICT (numero_van) DO UPDATE 
-      SET placa = EXCLUDED.placa, 
-          nome_identificacao = EXCLUDED.nome_identificacao, 
-          media_consumo = EXCLUDED.media_consumo
-    `;
-    return NextResponse.json({ message: 'Veículo salvo com sucesso!' });
+    const { id, numero_van, placa, nome, media } = await req.json();
+
+    if (id) {
+      // SE TEM ID, É UMA EDIÇÃO
+      await sql`
+        UPDATE veiculos 
+        SET numero_van = ${numero_van}, 
+            placa = ${placa}, 
+            nome_identificacao = ${nome}, 
+            media_consumo = ${media}
+        WHERE id = ${id}
+      `;
+    } else {
+      // SE NÃO TEM ID, É UM CADASTRO NOVO
+      await sql`
+        INSERT INTO veiculos (numero_van, placa, nome_identificacao, media_consumo)
+        VALUES (${numero_van}, ${placa}, ${nome}, ${media})
+        ON CONFLICT (numero_van) DO NOTHING
+      `;
+    }
+    return NextResponse.json({ message: 'Salvo' });
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }
 
@@ -31,6 +39,6 @@ export async function DELETE(req: Request) {
   const id = searchParams.get('id');
   try {
     await sql`DELETE FROM veiculos WHERE id = ${id}`;
-    return NextResponse.json({ message: 'Veículo removido' });
+    return NextResponse.json({ message: 'Removido' });
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }
