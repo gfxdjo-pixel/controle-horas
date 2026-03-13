@@ -1,7 +1,7 @@
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-// Certifique-se de que o caminho dos pontos está correto conforme o VS Code aceitou (./ ou ../../)
+// Ajuste o caminho conforme o VS Code aceitou (./ ou ../../)
 import { authOptions } from "../../auth/[...nextauth]/route";
 
 export async function GET(req: Request) {
@@ -23,7 +23,6 @@ export async function POST(req: Request) {
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }
 
-// ESTA FUNÇÃO LIBERA A EXCLUSÃO
 export async function DELETE(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -33,6 +32,6 @@ export async function DELETE(req: Request) {
 
   try {
     await sql`DELETE FROM horas_extras WHERE id = ${id} AND user_email = ${session.user?.email}`;
-    return NextResponse.json({ message: 'Excluído!' });
+    return NextResponse.json({ message: 'Excluído com sucesso' });
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }

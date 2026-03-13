@@ -10,7 +10,7 @@ import Link from 'next/link';
 export default function Home() {
   const { data: session, status } = useSession(); 
   
-  const [registros, setRegistros] = useState([]);
+  const [registros, setRegistros] = useState<any[]>([]);
   const [form, setForm] = useState({ 
     data: '', 
     hora_inicio: '', 
@@ -33,10 +33,14 @@ export default function Home() {
     if (filtro.inicio && filtro.fim) {
       url += `?inicio=${filtro.inicio}&fim=${filtro.fim}`;
     }
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      setRegistros(data || []);
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setRegistros(data || []);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados:", err);
     }
   };
 
@@ -92,10 +96,19 @@ export default function Home() {
     setEditandoId(null);
   };
 
+  // FUNÇÃO DE EXCLUSÃO CORRIGIDA
   const deletarRegistro = async (id: number) => {
     if (confirm('Tem certeza que deseja excluir esta rota permanentemente?')) {
-      await fetch(`/api/horas?id=${id}`, { method: 'DELETE' });
-      carregarDados();
+      try {
+        const res = await fetch(`/api/horas?id=${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          carregarDados(); // Recarrega a lista após deletar
+        } else {
+          alert("Erro ao excluir do servidor.");
+        }
+      } catch (err) {
+        alert("Erro de conexão ao excluir.");
+      }
     }
   };
 
@@ -124,14 +137,15 @@ export default function Home() {
   const formatarMinutosParaHoras = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    return `${h}h ${m}m`;
+    return `${h}h ${m.toString().padStart(2, '0')}m`;
   };
 
   const registrosDoMes = registros.filter((reg: any) => reg.data && reg.data.startsWith(mesResumo));
   const resumoPorDia = registrosDoMes.reduce((acc: any, reg: any) => {
     const mins = obterMinutos(reg.hora_inicio, reg.hora_fim);
-    if (!acc[reg.data]) acc[reg.data] = 0;
-    acc[reg.data] += mins;
+    const dataChave = reg.data.substring(0, 10);
+    if (!acc[dataChave]) acc[dataChave] = 0;
+    acc[dataChave] += mins;
     return acc;
   }, {});
 
@@ -139,8 +153,7 @@ export default function Home() {
   const totalMinutosMes = diasOrdenados.reduce((total, [, mins]: any) => total + mins, 0);
 
   const exportarPDF = () => {
-    const doc = new jsPDF('l', 'mm', 'a4'); // Horizontal para caber mais colunas
-    
+    const doc = new jsPDF('l', 'mm', 'a4');
     doc.setFontSize(18);
     doc.text('Relatório de Horas e KM', 14, 22);
     
@@ -174,13 +187,7 @@ export default function Home() {
     doc.save(`Relatorio_${session?.user?.name}_${mesResumo}.pdf`);
   };
 
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-medium">
-        Carregando painel...
-      </div>
-    );
-  }
+  if (status === "loading") return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-medium">Carregando painel...</div>;
 
   if (!session) {
     return (
@@ -189,12 +196,7 @@ export default function Home() {
           <Clock className="text-blue-600 mx-auto mb-4" size={48} />
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Acesso Restrito</h1>
           <p className="text-slate-500 mb-8">Faça login com seu e-mail para registrar as rotas.</p>
-          <button 
-            onClick={() => signIn('google')} 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors"
-          >
-            Entrar com Google
-          </button>
+          <button onClick={() => signIn('google')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors">Entrar com Google</button>
         </div>
       </div>
     );
@@ -211,50 +213,40 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-4">
             {session?.user?.email === 'gfxdjo@gmail.com' && (
-              <Link 
-                href="/admin" 
-                className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-black transition-all shadow-md"
-              >
+              <Link href="/admin" className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-black transition-all shadow-md">
                 <Users size={16} /> Painel Master
               </Link>
             )}
-
-            <span className="text-sm font-medium text-slate-600 hidden sm:block">
-              Olá, {session?.user?.name?.split(' ')[0]}
-            </span>
+            <span className="text-sm font-medium text-slate-600 hidden sm:block">Olá, {session?.user?.name?.split(' ')[0]}</span>
             <button onClick={() => signOut()} className="text-slate-500 hover:text-red-600 flex items-center gap-2 text-sm bg-slate-50 px-4 py-2 rounded-lg transition-colors border border-slate-100">
               <LogOut size={16} /> Sair
             </button>
           </div>
         </header>
 
+        {/* FORMULÁRIO */}
         <section className={`p-6 rounded-2xl shadow-sm border transition-colors ${editandoId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}>
           <div className="flex justify-between items-center mb-4">
-            <h2 className={`text-lg font-semibold ${editandoId ? 'text-amber-800' : 'text-slate-700'}`}>
-              {editandoId ? 'Editar Registro' : 'Lançar Nova Rota'}
-            </h2>
+            <h2 className={`text-lg font-semibold ${editandoId ? 'text-amber-800' : 'text-slate-700'}`}>{editandoId ? 'Editar Registro' : 'Lançar Nova Rota'}</h2>
             {editandoId && (
               <button type="button" onClick={cancelarEdicao} className="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-sm bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
                 <X size={14} /> Cancelar edição
               </button>
             )}
           </div>
-          
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-1">
+            <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Data</label>
               <input type="date" required value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="mt-1 w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
             </div>
-
-            <div className="md:col-span-1">
-              <label className="text-xs font-bold text-slate-500 uppercase">Número da Van</label>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase">Van</label>
               <div className="relative mt-1">
                 <Truck className="absolute left-3 top-2.5 text-slate-400" size={18} />
                 <input type="text" required value={form.numero_van} onChange={e => setForm({...form, numero_van: e.target.value})} className="w-full pl-10 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Ex: 05" />
               </div>
             </div>
-            
-            <div className="md:col-span-1 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase">Início</label>
                 <input type="time" required value={form.hora_inicio} onChange={e => setForm({...form, hora_inicio: e.target.value})} className="mt-1 w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
@@ -264,60 +256,53 @@ export default function Home() {
                 <input type="time" required value={form.hora_fim} onChange={e => setForm({...form, hora_fim: e.target.value})} className="mt-1 w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
               </div>
             </div>
-
-            <div className="md:col-span-1">
+            <div>
               <label className="text-xs font-bold text-slate-500 uppercase">Rota / Obs</label>
               <input type="text" required value={form.rota} onChange={e => setForm({...form, rota: e.target.value})} className="mt-1 w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Ex: Rota Sul" />
             </div>
-
             <div className="md:col-span-2 grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase text-blue-600">KM Inicial</label>
                 <div className="relative mt-1">
-                   <Gauge className="absolute left-3 top-2.5 text-blue-400" size={18} />
-                   <input type="number" value={form.km_inicial} onChange={e => setForm({...form, km_inicial: e.target.value})} className="w-full pl-10 p-2 border border-blue-100 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="0" />
+                  <Gauge className="absolute left-3 top-2.5 text-blue-400" size={18} />
+                  <input type="number" value={form.km_inicial} onChange={e => setForm({...form, km_inicial: e.target.value})} className="w-full pl-10 p-2 border border-blue-100 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase text-emerald-600">KM Final</label>
                 <div className="relative mt-1">
-                   <Gauge className="absolute left-3 top-2.5 text-emerald-400" size={18} />
-                   <input type="number" value={form.km_final} onChange={e => setForm({...form, km_final: e.target.value})} className="w-full pl-10 p-2 border border-emerald-100 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 bg-white" placeholder="0" />
+                  <Gauge className="absolute left-3 top-2.5 text-emerald-400" size={18} />
+                  <input type="number" value={form.km_final} onChange={e => setForm({...form, km_final: e.target.value})} className="w-full pl-10 p-2 border border-emerald-100 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
                 </div>
               </div>
             </div>
-
             <div className="md:col-span-4 flex justify-end mt-2">
-              <button disabled={loading} className={`font-bold py-2 px-8 rounded-lg transition-all text-white shadow-md ${editandoId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+              <button disabled={loading} className={`font-bold py-2 px-8 rounded-lg text-white shadow-md ${editandoId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
                 {loading ? 'Salvando...' : editandoId ? 'Atualizar Registro' : 'Registrar Rota'}
               </button>
             </div>
           </form>
         </section>
 
+        {/* FECHAMENTO MENSAL */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2 text-slate-700">
-              <BarChart3 className="text-emerald-500" size={24} />
-              <h2 className="text-lg font-semibold">Fechamento Mensal</h2>
-            </div>
+          <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2"><BarChart3 className="text-emerald-500" size={24} /> Fechamento Mensal</h2>
             <div className="flex items-center gap-3 w-full md:w-auto">
-              <input type="month" value={mesResumo} onChange={e => setMesResumo(e.target.value)} className="p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white" />
-              <button onClick={exportarPDF} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              <input type="month" value={mesResumo} onChange={e => setMesResumo(e.target.value)} className="p-2 border rounded-lg text-sm bg-white" />
+              <button onClick={exportarPDF} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
                 <FileDown size={18} /> Exportar PDF
               </button>
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-center items-center text-center">
-              <span className="text-sm font-medium text-slate-500 mb-1">Total de Horas no Mês</span>
+              <span className="text-sm font-medium text-slate-500">Total de Horas no Mês</span>
               <span className="text-4xl font-bold text-emerald-600">{formatarMinutosParaHoras(totalMinutosMes)}</span>
             </div>
-            
             <div className="max-h-48 overflow-y-auto pr-2 space-y-2">
               {diasOrdenados.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8">Nenhuma hora extra registrada neste mês.</p>
+                <p className="text-sm text-slate-400 text-center py-8">Nenhuma hora registrada.</p>
               ) : (
                 diasOrdenados.map(([data, mins]: any) => (
                   <div key={data} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-lg text-sm">
@@ -330,48 +315,35 @@ export default function Home() {
           </div>
         </section>
 
+        {/* HISTÓRICO */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <h2 className="text-lg font-semibold text-slate-700">Histórico Completo</h2>
-            <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
-              <Calendar size={16} className="text-slate-400" />
-              <input type="date" value={filtro.inicio} onChange={e => setFiltro({...filtro, inicio: e.target.value})} className="text-sm bg-transparent outline-none" />
-              <span className="text-slate-400 text-sm">até</span>
-              <input type="date" value={filtro.fim} onChange={e => setFiltro({...filtro, fim: e.target.value})} className="text-sm bg-transparent outline-none" />
-            </div>
-          </div>
-
+          <h2 className="text-lg font-semibold text-slate-700 mb-6">Histórico Recente</h2>
           <div className="space-y-3">
             {registros.length === 0 ? (
               <p className="text-center text-slate-500 py-8">Nenhum registro encontrado.</p>
             ) : (
               registros.map((reg: any) => (
-                <div key={reg.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 hover:bg-slate-50 border border-slate-100 rounded-xl transition-colors gap-4">
+                <div key={reg.id} className="flex flex-col sm:flex-row justify-between items-center p-4 hover:bg-slate-50 border border-slate-100 rounded-xl gap-4">
                   <div className="flex items-center gap-4 w-full">
                     <div className="bg-blue-50 text-blue-700 p-3 rounded-lg flex flex-col items-center justify-center min-w-[100px]">
                       <span className="text-[10px] font-bold text-blue-500 uppercase">Van {reg.numero_van}</span>
-                      <span className="font-bold text-lg leading-tight">{calcularDuracao(reg.hora_inicio, reg.hora_fim)}</span>
+                      <span className="font-bold text-lg">{calcularDuracao(reg.hora_inicio, reg.hora_fim)}</span>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                          <p className="font-bold text-slate-800">{reg.rota}</p>
                          {reg.km_final && reg.km_inicial && (
                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
-                             {reg.km_final - reg.km_inicial} KM rodados
+                             {Number(reg.km_final) - Number(reg.km_inicial)} KM
                            </span>
                          )}
                       </div>
                       <p className="text-xs text-slate-500">{formatarData(reg.data)} • {reg.hora_inicio} às {reg.hora_fim}</p>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-2 self-end sm:self-auto">
-                    <button onClick={() => iniciarEdicao(reg)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
-                      <Pencil size={18} />
-                    </button>
-                    <button onClick={() => deletarRegistro(reg.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                      <Trash2 size={18} />
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => iniciarEdicao(reg)} className="p-2 text-slate-400 hover:text-amber-600"><Pencil size={18} /></button>
+                    <button onClick={() => deletarRegistro(reg.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 size={18} /></button>
                   </div>
                 </div>
               ))
