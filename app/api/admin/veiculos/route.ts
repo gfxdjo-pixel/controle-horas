@@ -11,6 +11,9 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const { numero_van, placa, nome, media } = await req.json();
+    
+    // O comando ON CONFLICT permite que, se o numero_van já existir, 
+    // o banco apenas atualize os outros dados (EDITAR)
     await sql`
       INSERT INTO veiculos (numero_van, placa, nome_identificacao, media_consumo)
       VALUES (${numero_van}, ${placa}, ${nome}, ${media})
@@ -19,7 +22,7 @@ export async function POST(req: Request) {
           nome_identificacao = EXCLUDED.nome_identificacao, 
           media_consumo = EXCLUDED.media_consumo
     `;
-    return NextResponse.json({ message: 'Ok' });
+    return NextResponse.json({ message: 'Veículo salvo com sucesso!' });
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }
 
@@ -28,6 +31,6 @@ export async function DELETE(req: Request) {
   const id = searchParams.get('id');
   try {
     await sql`DELETE FROM veiculos WHERE id = ${id}`;
-    return NextResponse.json({ message: 'Ok' });
+    return NextResponse.json({ message: 'Veículo removido' });
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }
