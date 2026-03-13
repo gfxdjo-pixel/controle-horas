@@ -1,28 +1,55 @@
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '../auth/[...nextauth]/route';
 
-const ADMIN_EMAILS = [
-  'gfxdjo@gmail.com',
-];
-
-export const dynamic = 'force-dynamic';
-
-export async function GET() {
+export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  
-  if (!session || !ADMIN_EMAILS.includes(session.user?.email || '')) {
-    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
-  }
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
   try {
-    const result = await sql`
-      SELECT * FROM horas_extras 
-      ORDER BY user_email ASC, data DESC;
+    const { data, hora_inicio, hora_fim, rota, numero_van, km_inicial, km_final } = await req.json();
+    
+    await sql`
+      INSERT INTO horas_extras (data, hora_inicio, hora_fim, rota, user_email, numero_van, km_inicial, km_final)
+      VALUES (${data}, ${hora_inicio}, ${hora_fim}, ${rota}, ${session.user?.email}, ${numero_van}, ${km_inicial}, ${km_final})
     `;
-    return NextResponse.json(result.rows, { status: 200 });
+    
+    return NextResponse.json({ message: 'Salvo com sucesso' }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const inicio = searchParams.get('inicio');
+  const fim = searchParams.get('fim');
+
+  try {
+    let result;
+    if (inicio && fim) {
+      result = await sql`
+        SELECT * FROM horas_extras 
+        WHERE user_email = ${session.user?.email} 
+        AND data BETWEEN ${inicio} AND ${fim}
+        ORDER BY data DESC
+      `;
+    } else {
+      result = await sql`
+        SELECT * FROM horas_extras 
+        WHERE user_email = ${session.user?.email} 
+        ORDER BY data DESC
+      `;
+    }
+    return NextResponse.json(result.rows);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// Adicione também a função DELETE e PUT conforme você já tinha, 
+// apenas garantindo que o PUT também receba os novos campos.
