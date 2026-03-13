@@ -9,7 +9,9 @@ import autoTable from 'jspdf-autotable';
 
 export default function AdminPanel() {
   const { data: session } = useSession();
-  const [todosRegistros, setTodosRegistros] = useState([]);
+  
+  // Tipagem <any[]> para evitar o erro de "never[]" que vimos no seu VS Code
+  const [todosRegistros, setTodosRegistros] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<string[]>([]);
   const [vans, setVans] = useState<string[]>([]);
   
@@ -25,13 +27,22 @@ export default function AdminPanel() {
         const res = await fetch('/api/admin/horas');
         if (res.ok) {
           const data = await res.json();
-          setTodosRegistros(data);
-          setUsuarios([...new Set(data.map((reg: any) => reg.user_email))] as string[]);
-          // Força a captura das vans mesmo em registros novos
-          const listaVans = [...new Set(data.map((reg: any) => reg.numero_van))].filter(Boolean) as string[];
+          const listaSegura = Array.isArray(data) ? data : [];
+          setTodosRegistros(listaSegura);
+          
+          // Captura motoristas apenas de registros que possuem e-mail
+          const listaEmails = [...new Set(listaSegura.map((reg: any) => reg.user_email))].filter(Boolean) as string[];
+          setUsuarios(listaEmails.sort());
+
+          // Captura vans ignorando valores nulos
+          const listaVans = [...new Set(listaSegura.map((reg: any) => reg.numero_van))].filter(Boolean) as string[];
           setVans(listaVans.sort());
         }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
+      } catch (err) { 
+        console.error("Erro ao carregar:", err); 
+      } finally { 
+        setLoading(false); 
+      }
     };
     carregarDadosAdmin();
   }, []);
@@ -40,7 +51,7 @@ export default function AdminPanel() {
     const matchUsuario = usuarioSelecionado ? reg.user_email === usuarioSelecionado : true;
     const matchVan = vanSelecionada ? String(reg.numero_van) === String(vanSelecionada) : true;
     let matchData = true;
-    if (dataInicio && dataFim) {
+    if (dataInicio && dataFim && reg.data) {
       const dataReg = reg.data.substring(0, 10);
       matchData = dataReg >= dataInicio && dataReg <= dataFim;
     }
@@ -49,24 +60,33 @@ export default function AdminPanel() {
 
   const exportarPDFMaster = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
-    doc.text('Relatório de Frota', 14, 15);
+    doc.text('Relatório de Frota - Gestão Master', 14, 15);
     const colunas = ["Data", "Motorista", "Van", "Início", "Fim", "Rota", "KM Inicial", "KM Final", "Total KM"];
+    
     const linhas = registrosFiltrados.map((reg: any) => [
-      new Date(reg.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
-      reg.user_email.split('@')[0],
+      reg.data ? new Date(reg.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-',
+      reg.user_email ? reg.user_email.split('@')[0].toUpperCase() : 'S/I',
       reg.numero_van || '-',
-      reg.hora_inicio,
-      reg.hora_fim,
-      reg.rota,
+      reg.hora_inicio || '-',
+      reg.hora_fim || '-',
+      reg.rota || '-',
       reg.km_inicial || '-',
       reg.km_final || '-',
-      (reg.km_final && reg.km_inicial) ? (reg.km_final - reg.km_inicial) : '-'
+      (reg.km_final && reg.km_inicial) ? (Number(reg.km_final) - Number(reg.km_inicial)) : '-'
     ]);
-    autoTable(doc, { startY: 25, head: [colunas], body: linhas, theme: 'grid', headStyles: { fillColor: [15, 23, 42] }, styles: { fontSize: 7 } });
-    doc.save(`Relatorio_Frota.pdf`);
+
+    autoTable(doc, { 
+        startY: 25, 
+        head: [colunas], 
+        body: linhas, 
+        theme: 'grid', 
+        headStyles: { fillColor: [15, 23, 42] }, 
+        styles: { fontSize: 7 } 
+    });
+    doc.save(`Relatorio_Frota_Master.pdf`);
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white">Carregando...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white">Carregando dados mestre...</div>;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-8">
@@ -76,16 +96,18 @@ export default function AdminPanel() {
             <Link href="/" className="bg-slate-800 p-2 rounded-lg"><ArrowLeft size={20} /></Link>
             <h1 className="text-2xl font-bold flex items-center gap-2"><Truck className="text-blue-400" /> Gestão Master</h1>
           </div>
-          <button onClick={exportarPDFMaster} className="bg-emerald-600 p-2 px-6 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg"><FileDown size={18} /> Exportar Relatório</button>
+          <button onClick={exportarPDFMaster} className="bg-emerald-600 p-2 px-6 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg transition-transform active:scale-95">
+            <FileDown size={18} /> Exportar Relatório
+          </button>
         </header>
 
-        {/* FILTROS ATUALIZADOS */}
+        {/* FILTROS DINÂMICOS */}
         <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700 grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2"><Mail size={12}/> Motorista</label>
             <select value={usuarioSelecionado} onChange={e => setUsuarioSelecionado(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-300">
               <option value="">Todos os Motoristas</option>
-              {usuarios.map(u => <option key={u} value={u}>{u}</option>)}
+              {usuarios.map(u => <option key={u} value={u}>{u.split('@')[0].toUpperCase()}</option>)}
             </select>
           </div>
           <div className="space-y-2">
@@ -104,7 +126,7 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        {/* TABELA COM TODAS AS COLUNAS SOLICITADAS */}
+        {/* TABELA MASTER */}
         <div className="bg-slate-800/50 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -113,7 +135,7 @@ export default function AdminPanel() {
                   <th className="p-4">Data</th>
                   <th className="p-4">Motorista</th>
                   <th className="p-4">Van</th>
-                  <th className="p-4">Horário (Início/Fim)</th>
+                  <th className="p-4">Horário</th>
                   <th className="p-4">Rota/Obs</th>
                   <th className="p-4 text-center">KM Ini</th>
                   <th className="p-4 text-center">KM Fim</th>
@@ -121,18 +143,26 @@ export default function AdminPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/50">
-                {registrosFiltrados.map((reg: any) => (
-                  <tr key={reg.id} className="hover:bg-slate-700/30">
-                    <td className="p-4 whitespace-nowrap">{new Date(reg.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-                    <td className="p-4 font-bold text-slate-200">{reg.user_email.split('@')[0]}</td>
-                    <td className="p-4"><span className="bg-blue-900/40 text-blue-400 border border-blue-800 px-2 py-0.5 rounded text-[10px] font-bold">V-{reg.numero_van || '-'}</span></td>
-                    <td className="p-4 font-mono text-slate-300">{reg.hora_inicio} — {reg.hora_fim}</td>
-                    <td className="p-4 max-w-[150px] truncate" title={reg.rota}>{reg.rota}</td>
-                    <td className="p-4 text-center text-slate-400">{reg.km_inicial || '-'}</td>
-                    <td className="p-4 text-center text-slate-400">{reg.km_final || '-'}</td>
-                    <td className="p-4 text-center font-bold text-emerald-500">{ (reg.km_final && reg.km_inicial) ? (reg.km_final - reg.km_inicial) : '-' }</td>
-                  </tr>
-                ))}
+                {registrosFiltrados.length === 0 ? (
+                    <tr><td colSpan={8} className="p-10 text-center text-slate-500">Nenhum registro encontrado.</td></tr>
+                ) : (
+                  registrosFiltrados.map((reg: any) => (
+                    <tr key={reg.id} className="hover:bg-slate-700/30">
+                      <td className="p-4 whitespace-nowrap">{reg.data ? new Date(reg.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}</td>
+                      <td className="p-4 font-bold text-slate-200">
+                        {reg.user_email ? reg.user_email.split('@')[0].toUpperCase() : <span className="text-slate-600 text-[10px]">Antigo (S/I)</span>}
+                      </td>
+                      <td className="p-4"><span className="bg-blue-900/40 text-blue-400 border border-blue-800 px-2 py-0.5 rounded text-[10px] font-bold">V-{reg.numero_van || '-'}</span></td>
+                      <td className="p-4 font-mono text-slate-300">{reg.hora_inicio || '--:--'} — {reg.hora_fim || '--:--'}</td>
+                      <td className="p-4 max-w-[150px] truncate" title={reg.rota}>{reg.rota || '-'}</td>
+                      <td className="p-4 text-center text-slate-400">{reg.km_inicial || '-'}</td>
+                      <td className="p-4 text-center text-slate-400">{reg.km_final || '-'}</td>
+                      <td className="p-4 text-center font-bold text-emerald-500">
+                        { (reg.km_final && reg.km_inicial) ? (Number(reg.km_final) - Number(reg.km_inicial)) : '-' }
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
