@@ -1,95 +1,61 @@
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/[...nextauth]/route'; // Puxa as regras de login
 
-export const dynamic = 'force-dynamic'; // MATA O CACHE: Obriga o Next.js a sempre ir no banco novo
+// Esta é a forma mais segura de importar quando o caminho relativo falha
+// Ele sobe 3 níveis para chegar na raiz e entrar na pasta auth
+import { authOptions } from "../auth/[...nextauth]/route";
 
-export async function GET(request: Request) {
-  // Passa o authOptions para garantir que ele ache o usuário
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user?.email) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-  const userEmail = session.user.email;
-
-  const { searchParams } = new URL(request.url);
-  const inicio = searchParams.get('inicio');
-  const fim = searchParams.get('fim');
-
+export async function GET(req: Request) {
   try {
-    let result;
-    if (inicio && fim) {
-      result = await sql`
-        SELECT * FROM horas_extras 
-        WHERE user_email = ${userEmail} AND data >= ${inicio} AND data <= ${fim} 
-        ORDER BY data DESC;
-      `;
-    } else {
-      result = await sql`
-        SELECT * FROM horas_extras 
-        WHERE user_email = ${userEmail} 
-        ORDER BY data DESC LIMIT 100;
-      `;
+    const session = await getServerSession(authOptions);
+    
+    if (!session) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
-    return NextResponse.json(result.rows, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao buscar dados' }, { status: 500 });
-  }
-}
 
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user?.email) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-  const userEmail = session.user.email;
-
-  try {
-    const { data, hora_inicio, hora_fim, rota } = await request.json();
-    await sql`
-      INSERT INTO horas_extras (data, hora_inicio, hora_fim, rota, user_email)
-      VALUES (${data}, ${hora_inicio}, ${hora_fim}, ${rota}, ${userEmail});
+    const result = await sql`
+      SELECT id, data, hora_inicio, hora_fim, rota, numero_van, km_inicial, km_final 
+      FROM horas_extras 
+      WHERE user_email = ${session.user?.email} 
+      ORDER BY data DESC
     `;
-    return NextResponse.json({ message: 'Registro adicionado!' }, { status: 201 });
+    return NextResponse.json(result.rows);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao salvar no banco' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user?.email) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-  const userEmail = session.user.email;
-
+export async function POST(req: Request) {
   try {
-    const { id, data, hora_inicio, hora_fim, rota } = await request.json();
+    const session = await getServerSession(authOptions);
+    
+    if (!session) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    
+    // Tratando os números para o banco de dados
+    const km_ini = body.km_inicial ? parseInt(body.km_inicial) : null;
+    const km_fim = body.km_final ? parseInt(body.km_final) : null;
+
     await sql`
-      UPDATE horas_extras 
-      SET data = ${data}, hora_inicio = ${hora_inicio}, hora_fim = ${hora_fim}, rota = ${rota}
-      WHERE id = ${id} AND user_email = ${userEmail};
+      INSERT INTO horas_extras (data, hora_inicio, hora_fim, rota, user_email, numero_van, km_inicial, km_final)
+      VALUES (
+        ${body.data}, 
+        ${body.hora_inicio}, 
+        ${body.hora_fim}, 
+        ${body.rota}, 
+        ${session.user?.email}, 
+        ${body.numero_van}, 
+        ${km_ini}, 
+        ${km_fim}
+      )
     `;
-    return NextResponse.json({ message: 'Registro atualizado!' }, { status: 200 });
+    
+    return NextResponse.json({ message: 'Salvo com sucesso' });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao atualizar no banco' }, { status: 500 });
-  }
-}
-
-export async function DELETE(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user?.email) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-  }
-  const userEmail = session.user.email;
-
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-  try {
-    await sql`DELETE FROM horas_extras WHERE id = ${id} AND user_email = ${userEmail};`;
-    return NextResponse.json({ message: 'Deletado com sucesso' }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao deletar' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
