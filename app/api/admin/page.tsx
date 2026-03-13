@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from "next-auth/react";
 import { 
   Users, ArrowLeft, Truck, Mail, FileDown, 
@@ -13,30 +13,26 @@ import autoTable from 'jspdf-autotable';
 
 export default function AdminPanel() {
   const { data: session } = useSession();
-  const [abaAtiva, setAbaAtiva] = useState('relatorios'); // 'relatorios' | 'frota' | 'config'
+  const [abaAtiva, setAbaAtiva] = useState('relatorios');
   
-  // Estados de Dados
   const [todosRegistros, setTodosRegistros] = useState<any[]>([]);
   const [veiculos, setVeiculos] = useState<any[]>([]);
-  const [precoDiesel, setPrecoDiesel] = useState(6.00);
+  const [precoDiesel, setPrecoDiesel] = useState(6.00); // Valor padrão inicial
   const [loading, setLoading] = useState(true);
 
-  // Filtros de Relatório
   const [usuarioSelecionado, setUsuarioSelecionado] = useState('');
   const [vanSelecionada, setVanSelecionada] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
-
-  // Form de Veículo (Cadastro e Edição)
   const [formVeiculo, setFormVeiculo] = useState({ numero_van: '', placa: '', nome: '', media: '10' });
 
-  const carregarDadosAdmin = async () => {
+  // FUNÇÃO PARA CARREGAR TUDO DO BANCO (Incluindo o Preço Salvo)
+  const carregarDadosAdmin = useCallback(async () => {
     try {
-      setLoading(true);
       const [resHoras, resVeiculos, resConfig] = await Promise.all([
         fetch('/api/admin/horas'),
         fetch('/api/admin/veiculos'),
-        fetch('/api/admin/config-global') // API para o preço do Diesel
+        fetch('/api/admin/config-global') 
       ]);
 
       if (resHoras.ok) {
@@ -47,20 +43,25 @@ export default function AdminPanel() {
         const data = await resVeiculos.json();
         setVeiculos(Array.isArray(data) ? data : []);
       }
+      
+      // AQUI ESTÁ O SEGREDO: Carrega o preço que está no banco
       if (resConfig.ok) {
         const data = await resConfig.json();
-        if (data.valor) setPrecoDiesel(Number(data.valor));
+        if (data && data.valor) {
+          setPrecoDiesel(Number(data.valor));
+        }
       }
     } catch (err) { 
-      console.error("Erro ao carregar dados admin:", err); 
+      console.error("Erro ao sincronizar:", err); 
     } finally { 
       setLoading(false); 
     }
-  };
+  }, []);
 
-  useEffect(() => { carregarDadosAdmin(); }, []);
+  useEffect(() => { 
+    carregarDadosAdmin(); 
+  }, [carregarDadosAdmin]);
 
-  // Lógica de Veículos (Salvar/Editar)
   const salvarVeiculo = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch('/api/admin/veiculos', {
@@ -86,21 +87,28 @@ export default function AdminPanel() {
   };
 
   const deletarVeiculo = async (id: number) => {
-    if (!confirm('Deseja realmente excluir este veículo da frota?')) return;
+    if (!confirm('Excluir veículo?')) return;
     await fetch(`/api/admin/veiculos?id=${id}`, { method: 'DELETE' });
     carregarDadosAdmin();
   };
 
+  // FUNÇÃO PARA SALVAR O PREÇO NO BANCO DEFINITIVAMENTE
   const atualizarPrecoDiesel = async () => {
-    const res = await fetch('/api/admin/config-global', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chave: 'preco_diesel', valor: precoDiesel })
-    });
-    if (res.ok) alert("Preço do Diesel atualizado!");
+    try {
+      const res = await fetch('/api/admin/config-global', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chave: 'preco_diesel', valor: precoDiesel })
+      });
+      if (res.ok) {
+        alert("Preço salvo no banco de dados!");
+        carregarDadosAdmin(); // Recarrega para confirmar
+      }
+    } catch (err) {
+      alert("Erro ao salvar preço.");
+    }
   };
 
-  // Lógica de Filtro e Cálculos
   const registrosFiltrados = todosRegistros.filter((reg: any) => {
     const mUsuario = usuarioSelecionado ? reg.user_email === usuarioSelecionado : true;
     const mVan = vanSelecionada ? String(reg.numero_van) === String(vanSelecionada) : true;
@@ -147,9 +155,9 @@ export default function AdminPanel() {
     const doc = new jsPDF('l', 'mm', 'a4');
     doc.text('Relatório Master - Controle de Frota', 14, 15);
     doc.setFontSize(10);
-    doc.text(`KM Total: ${kmTotal} | Horas: ${somarMinutos()} | Custo Diesel: R$ ${custoTotal.toFixed(2)}`, 14, 22);
+    doc.text(`Resumo: ${kmTotal} KM | Horas: ${somarMinutos()} | Diesel Base: R$ ${precoDiesel.toFixed(2)} | Custo Total: R$ ${custoTotal.toFixed(2)}`, 14, 22);
 
-    const cols = ["Data", "Motorista", "Van", "Início", "Fim", "Total KM", "Custo Est.", "Rota"];
+    const cols = ["Data", "Motorista", "Van", "Início", "Fim", "KM", "Custo Est.", "Rota"];
     const rows = registrosFiltrados.map((reg: any) => {
         const vInfo = veiculos.find(v => String(v.numero_van) === String(reg.numero_van));
         const media = vInfo ? Number(vInfo.media_consumo) : 10;
@@ -167,10 +175,10 @@ export default function AdminPanel() {
     });
 
     autoTable(doc, { startY: 28, head: [cols], body: rows, theme: 'grid', styles: { fontSize: 7 } });
-    doc.save('Relatorio_Master_Frota.pdf');
+    doc.save('Relatorio_Frota_Master.pdf');
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white font-mono tracking-widest">CARREGANDO SISTEMA...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white font-mono">SINCRONIZANDO DADOS...</div>;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-8">
@@ -182,9 +190,9 @@ export default function AdminPanel() {
           </div>
           
           <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 shadow-inner">
-            <button onClick={() => setAbaAtiva('relatorios')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${abaAtiva === 'relatorios' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Relatórios</button>
-            <button onClick={() => setAbaAtiva('frota')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${abaAtiva === 'frota' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Frota</button>
-            <button onClick={() => setAbaAtiva('config')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${abaAtiva === 'config' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Diesel</button>
+            <button onClick={() => setAbaAtiva('relatorios')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${abaAtiva === 'relatorios' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Relatórios</button>
+            <button onClick={() => setAbaAtiva('frota')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${abaAtiva === 'frota' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Frota</button>
+            <button onClick={() => setAbaAtiva('config')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${abaAtiva === 'config' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>Diesel</button>
           </div>
 
           <button onClick={exportarPDF} className="bg-emerald-600 hover:bg-emerald-700 p-2 px-6 rounded-lg flex items-center gap-2 text-sm font-bold shadow-lg transition-all active:scale-95">
@@ -193,7 +201,7 @@ export default function AdminPanel() {
         </header>
 
         {abaAtiva === 'relatorios' && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in duration-500">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
                 <div><p className="text-[10px] uppercase font-bold text-slate-500">Horas Totais</p><h2 className="text-2xl font-bold text-blue-400">{somarMinutos()}</h2></div>
@@ -204,17 +212,17 @@ export default function AdminPanel() {
                 <Gauge className="text-emerald-400" size={30} />
               </div>
               <div className="bg-slate-800/50 p-4 rounded-xl border border-amber-900/30 flex justify-between items-center">
-                <div><p className="text-[10px] uppercase font-bold text-amber-500">Custo Combustível</p><h2 className="text-2xl font-bold text-amber-500 uppercase text-sm md:text-2xl">R$ {custoTotal.toFixed(2)}</h2></div>
+                <div><p className="text-[10px] uppercase font-bold text-amber-500">Gasto Combustível</p><h2 className="text-2xl font-bold text-amber-500">R$ {custoTotal.toFixed(2)}</h2></div>
                 <div className="bg-amber-500/10 p-2 rounded text-amber-500 font-bold">R$</div>
               </div>
             </div>
 
-            <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700 grid grid-cols-1 md:grid-cols-4 gap-4">
-               <select value={usuarioSelecionado} onChange={e => setUsuarioSelecionado(e.target.value)} className="bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-300 outline-none focus:ring-1 focus:ring-blue-500">
+            <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700 grid grid-cols-1 md:grid-cols-4 gap-4 shadow-sm">
+               <select value={usuarioSelecionado} onChange={e => setUsuarioSelecionado(e.target.value)} className="bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-300">
                 <option value="">Todos Motoristas</option>
                 {[...new Set(todosRegistros.map(r => r.user_email))].filter(Boolean).map(u => <option key={u} value={u}>{u?.split('@')[0].toUpperCase()}</option>)}
               </select>
-              <select value={vanSelecionada} onChange={e => setVanSelecionada(e.target.value)} className="bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-300 outline-none focus:ring-1 focus:ring-blue-500">
+              <select value={vanSelecionada} onChange={e => setVanSelecionada(e.target.value)} className="bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-300">
                 <option value="">Todas as Vans</option>
                 {veiculos.map(v => <option key={v.numero_van} value={v.numero_van}>Van {v.numero_van}</option>)}
               </select>
@@ -237,7 +245,7 @@ export default function AdminPanel() {
                           <tr key={reg.id} className="hover:bg-slate-700/20 transition-colors">
                             <td className="p-4 whitespace-nowrap">{reg.data ? new Date(reg.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}</td>
                             <td className="p-4 font-bold text-slate-300">{reg.user_email?.split('@')[0].toUpperCase()}</td>
-                            <td className="p-4"><span className="bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-blue-400">V-{reg.numero_van}</span></td>
+                            <td className="p-4 text-blue-400 font-bold">V-{reg.numero_van}</td>
                             <td className="p-4 text-center text-slate-400">{km}</td>
                             <td className="p-4 text-center text-amber-500 font-mono font-bold">R$ {(km / media * precoDiesel).toFixed(2)}</td>
                           </tr>
@@ -251,21 +259,21 @@ export default function AdminPanel() {
         )}
 
         {abaAtiva === 'frota' && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
+          <div className="animate-in slide-in-from-bottom-2 duration-500 space-y-6">
             <form onSubmit={salvarVeiculo} className="bg-slate-800 p-6 rounded-2xl border border-slate-700 grid grid-cols-1 md:grid-cols-5 gap-4 items-end shadow-xl">
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Nº Van</label><input required value={formVeiculo.numero_van} onChange={e => setFormVeiculo({...formVeiculo, numero_van: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none focus:ring-1 focus:ring-blue-500" placeholder="Ex: 171" /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Placa</label><input value={formVeiculo.placa} onChange={e => setFormVeiculo({...formVeiculo, placa: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none focus:ring-1 focus:ring-blue-500" placeholder="ABC-1234" /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Identificação</label><input value={formVeiculo.nome} onChange={e => setFormVeiculo({...formVeiculo, nome: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none focus:ring-1 focus:ring-blue-500" placeholder="Van de Joinville" /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase text-emerald-500">Média (km/L)</label><input required type="number" step="0.1" value={formVeiculo.media} onChange={e => setFormVeiculo({...formVeiculo, media: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-emerald-900/30 mt-1 outline-none focus:ring-1 focus:ring-emerald-500" /></div>
-              <button type="submit" className="bg-blue-600 hover:bg-blue-700 p-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-all"><Save size={18} /> Salvar Veículo</button>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Nº Van</label><input required value={formVeiculo.numero_van} onChange={e => setFormVeiculo({...formVeiculo, numero_van: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1" placeholder="Ex: 171" /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Placa</label><input value={formVeiculo.placa} onChange={e => setFormVeiculo({...formVeiculo, placa: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1" placeholder="ABC-1234" /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Identificação</label><input value={formVeiculo.nome} onChange={e => setFormVeiculo({...formVeiculo, nome: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1" placeholder="Van Matriz" /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase text-emerald-500">Média (km/L)</label><input required type="number" step="0.1" value={formVeiculo.media} onChange={e => setFormVeiculo({...formVeiculo, media: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-emerald-900/30 mt-1" /></div>
+              <button type="submit" className="bg-blue-600 hover:bg-blue-700 p-2 rounded-lg font-bold flex items-center justify-center gap-2"><Save size={18} /> Salvar</button>
             </form>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {veiculos.map(v => (
-                <div key={v.id} className="bg-slate-800/40 p-5 rounded-2xl border border-slate-700 flex justify-between items-center group hover:border-slate-500 transition-all">
+                <div key={v.id} className="bg-slate-800/40 p-5 rounded-2xl border border-slate-700 flex justify-between items-center group">
                   <div>
                     <h3 className="font-bold text-blue-400 text-lg">Van {v.numero_van}</h3>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">{v.placa || 'Sem Placa'} • {v.nome_identificacao || 'S/N'}</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1">{v.placa || 'Sem Placa'} • {v.nome_identificacao}</p>
                     <div className="mt-3 inline-block bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20">{v.media_consumo} km/L</div>
                   </div>
                   <div className="flex flex-col gap-2">
@@ -279,20 +287,19 @@ export default function AdminPanel() {
         )}
 
         {abaAtiva === 'config' && (
-          <div className="animate-in zoom-in-95 duration-300 bg-slate-800/50 p-10 rounded-3xl border border-slate-700 max-w-lg mx-auto text-center space-y-6 shadow-2xl">
+          <div className="animate-in zoom-in-95 duration-500 bg-slate-800/50 p-10 rounded-3xl border border-slate-700 max-w-lg mx-auto text-center space-y-6 shadow-2xl">
             <div className="bg-amber-500/10 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto border border-amber-500/20">
                 <Settings className="text-amber-500" size={40} />
             </div>
-            <h2 className="font-bold text-xl">Configuração de Custos</h2>
+            <h2 className="font-bold text-xl">Preço do Diesel</h2>
             <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Preço do Litro (Diesel)</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor do Litro (R$)</label>
                 <div className="flex items-center gap-4 justify-center">
                   <span className="text-3xl font-bold text-slate-600">R$</span>
-                  <input type="number" step="0.01" value={precoDiesel} onChange={e => setPrecoDiesel(Number(e.target.value))} className="bg-slate-900 text-4xl font-black text-amber-500 w-40 text-center p-3 rounded-2xl border border-slate-700 outline-none focus:ring-2 focus:ring-amber-500/50" />
+                  <input type="number" step="0.01" value={precoDiesel} onChange={e => setPrecoDiesel(Number(e.target.value))} className="bg-slate-900 text-4xl font-black text-amber-500 w-40 text-center p-3 rounded-2xl border border-slate-700 outline-none" />
                 </div>
             </div>
-            <button onClick={atualizarPrecoDiesel} className="w-full bg-amber-600 hover:bg-amber-700 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95"><Save size={20} /> Atualizar Preço para o Sistema</button>
-            <p className="text-[10px] text-slate-500 italic">Esse valor será aplicado em tempo real no cálculo de todas as rotas filtradas.</p>
+            <button onClick={atualizarPrecoDiesel} className="w-full bg-amber-600 hover:bg-amber-700 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95"><Save size={20} /> Salvar Preço</button>
           </div>
         )}
       </div>
