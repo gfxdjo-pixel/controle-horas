@@ -49,6 +49,45 @@ export default function AdminPanel() {
 
   useEffect(() => { carregarDadosAdmin(); }, [carregarDadosAdmin]);
 
+  // FUNÇÕES DE ENVIO DOS FORMULÁRIOS
+  const handleCriarEmpresa = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const res = await fetch('/api/admin/empresas', {
+      method: 'POST',
+      body: JSON.stringify({
+        nomeEmpresa: formData.get('nomeEmpresa'),
+        emailDono: formData.get('emailDono'),
+      })
+    });
+    if (res.ok) {
+      alert('Empresa e Dono criados com sucesso!');
+      (e.target as HTMLFormElement).reset();
+      carregarDadosAdmin();
+    } else {
+      alert('Erro ao criar empresa. Verifique se a API existe.');
+    }
+  };
+
+  const handleAutorizarUsuario = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const res = await fetch('/api/admin/usuarios', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: formData.get('email'),
+        role: formData.get('role'),
+      })
+    });
+    if (res.ok) {
+      alert('Membro autorizado com sucesso!');
+      (e.target as HTMLFormElement).reset();
+      carregarDadosAdmin();
+    } else {
+      alert('Erro ao autorizar usuário.');
+    }
+  };
+
   const salvarVeiculo = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch('/api/admin/veiculos', {
@@ -59,7 +98,7 @@ export default function AdminPanel() {
     if (res.ok) {
       setFormVeiculo({ id: null, numero_van: '', placa: '', nome: '', media: '10' });
       carregarDadosAdmin();
-      alert("Sucesso!");
+      alert("Veículo salvo!");
     }
   };
 
@@ -73,7 +112,7 @@ export default function AdminPanel() {
   };
 
   const deletarUsuario = async (id: number) => {
-    if (!confirm('Remover este usuário da equipe? Ele perderá acesso ao sistema.')) return;
+    if (!confirm('Remover este usuário?')) return;
     const res = await fetch(`/api/admin/usuarios?id=${id}`, { method: 'DELETE' });
     if (res.ok) carregarDadosAdmin();
   };
@@ -127,22 +166,15 @@ export default function AdminPanel() {
             <h1 className="text-xl font-bold flex items-center gap-2"><Truck className="text-blue-400" /> Master Frota</h1>
           </div>
           <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto max-w-full">
-            {[
-              { id: 'relatorios', label: 'Relatórios' },
-              { id: 'frota', label: 'Frota' },
-              { id: 'equipe', label: 'Equipe' },
-              { id: 'config', label: 'Diesel' }
-            ].map((aba) => (
-              <button key={aba.id} onClick={() => setAbaAtiva(aba.id)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${abaAtiva === aba.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-500'}`}>
-                {aba.label}
-              </button>
+            {[{ id: 'relatorios', label: 'Relatórios' }, { id: 'frota', label: 'Frota' }, { id: 'equipe', label: 'Equipe' }, { id: 'config', label: 'Diesel' }].map((aba) => (
+              <button key={aba.id} onClick={() => setAbaAtiva(aba.id)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${abaAtiva === aba.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>{aba.label}</button>
             ))}
           </div>
         </header>
 
         {abaAtiva === 'relatorios' && (
           <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
               <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
                 <p className="text-[10px] uppercase font-bold text-slate-500">Horas Totais</p>
                 <h2 className="text-2xl font-bold text-blue-400">{somarMinutos()}</h2>
@@ -202,10 +234,10 @@ export default function AdminPanel() {
         {abaAtiva === 'frota' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
             <form onSubmit={salvarVeiculo} className="bg-slate-800 p-6 rounded-2xl border border-slate-700 grid grid-cols-1 md:grid-cols-4 gap-4 items-end shadow-xl">
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Nº Van</label><input required value={formVeiculo.numero_van} onChange={e => setFormVeiculo({...formVeiculo, numero_van: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none focus:border-blue-500 text-white" /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Placa</label><input value={formVeiculo.placa} onChange={e => setFormVeiculo({...formVeiculo, placa: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none focus:border-blue-500 text-white" /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Média km/L</label><input required type="number" step="0.1" value={formVeiculo.media} onChange={e => setFormVeiculo({...formVeiculo, media: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none focus:border-blue-500 text-white" /></div>
-              <button type="submit" className="bg-blue-600 p-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-all active:scale-95 shadow-lg">
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Nº Van</label><input required value={formVeiculo.numero_van} onChange={e => setFormVeiculo({...formVeiculo, numero_van: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white" /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Placa</label><input value={formVeiculo.placa} onChange={e => setFormVeiculo({...formVeiculo, placa: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white" /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Média km/L</label><input required type="number" step="0.1" value={formVeiculo.media} onChange={e => setFormVeiculo({...formVeiculo, media: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white" /></div>
+              <button type="submit" className="bg-blue-600 p-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 shadow-lg">
                 {formVeiculo.id ? <Save size={18} /> : <Plus size={18} />} {formVeiculo.id ? 'Atualizar' : 'Adicionar'}
               </button>
             </form>
@@ -230,29 +262,14 @@ export default function AdminPanel() {
         {abaAtiva === 'equipe' && (
           <div className="animate-in slide-in-from-bottom-2 duration-500 space-y-6">
             
-            {/* PAINEL SUPER ADMIN: SÓ APARECE PARA VOCÊ */}
+            {/* PAINEL SUPER ADMIN EXCLUSIVO */}
             {session?.user?.email === 'gfxdjo@gmail.com' && (
               <div className="bg-blue-900/10 p-6 rounded-2xl border border-blue-500/30 shadow-2xl border-dashed">
                 <div className="flex items-center gap-2 mb-4">
                   <Building2 size={18} className="text-blue-400" />
                   <h3 className="text-xs font-black uppercase tracking-widest text-blue-400">Novo Cliente SaaS (Super Admin)</h3>
                 </div>
-                <form onSubmit={async (e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.currentTarget);
-                  const res = await fetch('/api/admin/empresas', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      nomeEmpresa: formData.get('nomeEmpresa'),
-                      emailDono: formData.get('emailDono'),
-                    })
-                  });
-                  if (res.ok) {
-                    alert('Empresa criada e Dono autorizado com sucesso!');
-                    (e.target as HTMLFormElement).reset();
-                    carregarDadosAdmin();
-                  }
-                }} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <form onSubmit={handleCriarEmpresa} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                   <div>
                     <label className="text-[10px] font-bold text-blue-300 uppercase">Nome da Empresa</label>
                     <input name="nomeEmpresa" required className="w-full bg-slate-950 p-2 rounded border border-blue-500/20 mt-1 outline-none text-white" placeholder="Ex: Transportes Joinville" />
@@ -261,7 +278,7 @@ export default function AdminPanel() {
                     <label className="text-[10px] font-bold text-blue-300 uppercase">E-mail do Dono</label>
                     <input name="emailDono" type="email" required className="w-full bg-slate-950 p-2 rounded border border-blue-500/20 mt-1 outline-none text-white" placeholder="dono@gmail.com" />
                   </div>
-                  <button type="submit" className="bg-blue-600 p-2 rounded-lg font-bold hover:bg-blue-500 transition-all text-white shadow-lg">Criar Nova Instância</button>
+                  <button type="submit" className="bg-blue-600 p-2 rounded-lg font-bold hover:bg-blue-500 transition-all text-white shadow-lg active:scale-95">Criar Nova Instância</button>
                 </form>
               </div>
             )}
@@ -271,29 +288,14 @@ export default function AdminPanel() {
                 <UserPlus size={18} className="text-blue-400" />
                 <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400">Autorizar Membro (Empresa Atual)</h3>
               </div>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const res = await fetch('/api/admin/usuarios', {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    email: formData.get('email'),
-                    role: formData.get('role'),
-                  })
-                });
-                if (res.ok) {
-                  alert('Usuário autorizado!');
-                  carregarDadosAdmin();
-                  (e.target as HTMLFormElement).reset();
-                }
-              }} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <form onSubmit={handleAutorizarUsuario} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase">E-mail do Google</label>
-                  <input name="email" type="email" required className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none focus:border-blue-500 text-white" placeholder="exemplo@gmail.com" />
+                  <input name="email" type="email" required className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white" placeholder="exemplo@gmail.com" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Função</label>
-                  <select name="role" className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none focus:border-blue-500 text-white">
+                  <select name="role" className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white">
                     <option value="user">Motorista</option>
                     <option value="admin">Administrador</option>
                   </select>
@@ -304,32 +306,22 @@ export default function AdminPanel() {
 
             <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden shadow-2xl">
               <div className="p-4 bg-slate-900/50 border-b border-slate-700">
-                <h4 className="text-[10px] font-bold uppercase text-slate-500 tracking-tighter flex items-center gap-2">
-                  <Shield size={14} /> Membros Ativos
-                </h4>
+                <h4 className="text-[10px] font-bold uppercase text-slate-500 tracking-tighter flex items-center gap-2"><Shield size={14} /> Membros Ativos</h4>
               </div>
               <table className="w-full text-left">
                 <thead className="bg-slate-900 text-slate-500 uppercase font-mono text-[10px]">
-                  <tr>
-                    <th className="p-4">E-mail</th>
-                    <th className="p-4">Cargo</th>
-                    <th className="p-4 text-right">Ações</th>
-                  </tr>
+                  <tr><th className="p-4">E-mail</th><th className="p-4">Cargo</th><th className="p-4 text-right">Ações</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
                   {usuariosEquipe.map((user: any) => (
                     <tr key={user.id} className="hover:bg-slate-700/20 transition-colors">
                       <td className="p-4 font-mono text-slate-300">{user.email}</td>
                       <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${user.role === 'admin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
-                          {user.role === 'admin' ? 'ADMIN' : 'MOTORISTA'}
-                        </span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${user.role === 'admin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>{user.role === 'admin' ? 'ADMIN' : 'MOTORISTA'}</span>
                       </td>
                       <td className="p-4 text-right">
                         {user.email !== session?.user?.email && (
-                          <button onClick={() => deletarUsuario(user.id)} className="p-2 text-slate-500 hover:text-red-500 transition-colors bg-slate-900/50 rounded-lg">
-                            <Trash2 size={16} />
-                          </button>
+                          <button onClick={() => deletarUsuario(user.id)} className="p-2 text-slate-500 hover:text-red-500 transition-colors bg-slate-900/50 rounded-lg"><Trash2 size={16} /></button>
                         )}
                       </td>
                     </tr>
@@ -352,9 +344,7 @@ export default function AdminPanel() {
                   <span className="text-3xl font-bold text-slate-600">R$</span>
                   <input type="number" step="0.01" value={precoDiesel} onChange={e => setPrecoDiesel(Number(e.target.value))} className="bg-slate-900 text-4xl font-black text-amber-500 w-40 text-center p-3 rounded-2xl border border-slate-700 outline-none focus:ring-2 focus:ring-amber-500/50 shadow-inner" />
                 </div>
-                <button onClick={atualizarPrecoDiesel} className="w-full bg-amber-600 hover:bg-amber-700 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95 mt-4">
-                  <Save size={20} /> Gravar Preço
-                </button>
+                <button onClick={atualizarPrecoDiesel} className="w-full bg-amber-600 hover:bg-amber-700 p-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95 mt-4"><Save size={20} /> Gravar Preço</button>
             </div>
           </div>
         )}
