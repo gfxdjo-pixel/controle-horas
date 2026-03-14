@@ -1,14 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession, signIn, signOut } from "next-auth/react";
-import { Clock, Route, Calendar, BarChart3, Pencil, Trash2, X, LogOut, FileDown, Users, Truck, Gauge } from 'lucide-react';
+import { 
+  Clock, 
+  Calendar, 
+  BarChart3, 
+  Pencil, 
+  Trash2, 
+  X, 
+  LogOut, 
+  FileDown, 
+  Users, 
+  Truck, 
+  Gauge, 
+  LayoutDashboard,
+  ShieldCheck
+} from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Link from 'next/link';
 
 export default function Home() {
-  const { data: session, status } = useSession(); 
+  const { data: session, status }: any = useSession(); 
   
   const [registros, setRegistros] = useState<any[]>([]);
   const [form, setForm] = useState({ 
@@ -28,7 +42,12 @@ export default function Home() {
   const mesAtual = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
   const [mesResumo, setMesResumo] = useState(mesAtual);
 
-  const carregarDados = async () => {
+  // Lógica de Permissão para exibir o botão de Gestão
+  const isSuperAdmin = session?.user?.email === 'gfxdjo@gmail.com';
+  const isAdmin = session?.user?.role === 'admin';
+  const podeAcessarGestao = isSuperAdmin || isAdmin;
+
+  const carregarDados = useCallback(async () => {
     let url = '/api/horas';
     if (filtro.inicio && filtro.fim) {
       url += `?inicio=${filtro.inicio}&fim=${filtro.fim}`;
@@ -42,13 +61,13 @@ export default function Home() {
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
     }
-  };
+  }, [filtro]);
 
   useEffect(() => { 
     if (session) {
       carregarDados(); 
     }
-  }, [filtro, session]);
+  }, [carregarDados, session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,13 +115,12 @@ export default function Home() {
     setEditandoId(null);
   };
 
-  // FUNÇÃO DE EXCLUSÃO CORRIGIDA
   const deletarRegistro = async (id: number) => {
     if (confirm('Tem certeza que deseja excluir esta rota permanentemente?')) {
       try {
         const res = await fetch(`/api/horas?id=${id}`, { method: 'DELETE' });
         if (res.ok) {
-          carregarDados(); // Recarrega a lista após deletar
+          carregarDados();
         } else {
           alert("Erro ao excluir do servidor.");
         }
@@ -156,7 +174,6 @@ export default function Home() {
     const doc = new jsPDF('l', 'mm', 'a4');
     doc.setFontSize(18);
     doc.text('Relatório de Horas e KM', 14, 22);
-    
     doc.setFontSize(11);
     doc.setTextColor(100);
     doc.text(`Colaborador: ${session?.user?.name}`, 14, 30);
@@ -187,16 +204,18 @@ export default function Home() {
     doc.save(`Relatorio_${session?.user?.name}_${mesResumo}.pdf`);
   };
 
-  if (status === "loading") return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-medium">Carregando painel...</div>;
+  if (status === "loading") return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-medium italic">Sincronizando Master Frota...</div>;
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center max-w-md w-full">
-          <Clock className="text-blue-600 mx-auto mb-4" size={48} />
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Acesso Restrito</h1>
-          <p className="text-slate-500 mb-8">Faça login com seu e-mail para registrar as rotas.</p>
-          <button onClick={() => signIn('google')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors">Entrar com Google</button>
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
+        <div className="bg-slate-800/50 p-8 rounded-3xl border border-slate-700 shadow-2xl text-center max-w-md w-full space-y-6">
+          <div className="bg-blue-600/20 w-20 h-20 rounded-full flex items-center justify-center mx-auto border border-blue-500/30">
+            <Truck className="text-blue-400" size={40} />
+          </div>
+          <h1 className="text-2xl font-black text-white uppercase tracking-widest">Master Frota</h1>
+          <p className="text-slate-400 text-sm">Acesse sua conta para registrar suas rotas e gerenciar sua jornada.</p>
+          <button onClick={() => signIn('google')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg active:scale-95">Entrar com Google</button>
         </div>
       </div>
     );
@@ -206,79 +225,93 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans">
       <div className="max-w-5xl mx-auto space-y-6">
         
-        <header className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <header className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Clock className="text-blue-600" size={28} />
-            <h1 className="text-2xl font-bold tracking-tight">Registro de Horas Extras</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Registro de Rotas</h1>
           </div>
-          <div className="flex items-center gap-4">
-            {session?.user?.email === 'gfxdjo@gmail.com' && (
-              <Link href="/admin" className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-black transition-all shadow-md">
-                <Users size={16} /> Painel Master
+          
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {podeAcessarGestao && (
+              <Link href="/admin" className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2 rounded-xl text-sm font-black uppercase tracking-wider hover:shadow-lg hover:scale-105 transition-all shadow-blue-500/20">
+                <ShieldCheck size={18} /> Painel de Gestão
               </Link>
             )}
-            <span className="text-sm font-medium text-slate-600 hidden sm:block">Olá, {session?.user?.name?.split(' ')[0]}</span>
-            <button onClick={() => signOut()} className="text-slate-500 hover:text-red-600 flex items-center gap-2 text-sm bg-slate-50 px-4 py-2 rounded-lg transition-colors border border-slate-100">
-              <LogOut size={16} /> Sair
+            
+            <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Motorista:</span>
+                <span className="text-sm font-bold text-slate-800">{session?.user?.name?.split(' ')[0]}</span>
+            </div>
+
+            <button onClick={() => signOut()} className="text-slate-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-all" title="Sair do Sistema">
+              <LogOut size={22} />
             </button>
           </div>
         </header>
 
         {/* FORMULÁRIO */}
-        <section className={`p-6 rounded-2xl shadow-sm border transition-colors ${editandoId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className={`text-lg font-semibold ${editandoId ? 'text-amber-800' : 'text-slate-700'}`}>{editandoId ? 'Editar Registro' : 'Lançar Nova Rota'}</h2>
+        <section className={`p-6 rounded-2xl shadow-sm border transition-all ${editandoId ? 'bg-amber-50 border-amber-200 ring-2 ring-amber-500/20' : 'bg-white border-slate-100'}`}>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className={`text-lg font-black uppercase tracking-tight ${editandoId ? 'text-amber-800' : 'text-slate-700'}`}>
+                {editandoId ? 'Editando Registro' : 'Lançar Nova Rota'}
+            </h2>
             {editandoId && (
-              <button type="button" onClick={cancelarEdicao} className="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-sm bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
+              <button type="button" onClick={cancelarEdicao} className="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-xs font-bold bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
                 <X size={14} /> Cancelar edição
               </button>
             )}
           </div>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase">Data</label>
-              <input type="date" required value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="mt-1 w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data do Serviço</label>
+              <input type="date" required value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="mt-1 w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50" />
             </div>
+            
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase">Van</label>
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Número da Van</label>
               <div className="relative mt-1">
-                <Truck className="absolute left-3 top-2.5 text-slate-400" size={18} />
-                <input type="text" required value={form.numero_van} onChange={e => setForm({...form, numero_van: e.target.value})} className="w-full pl-10 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Ex: 05" />
+                <Truck className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                <input type="text" required value={form.numero_van} onChange={e => setForm({...form, numero_van: e.target.value})} className="w-full pl-10 p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50" placeholder="Ex: 05" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Início</label>
-                <input type="time" required value={form.hora_inicio} onChange={e => setForm({...form, hora_inicio: e.target.value})} className="mt-1 w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saída</label>
+                <input type="time" required value={form.hora_inicio} onChange={e => setForm({...form, hora_inicio: e.target.value})} className="mt-1 w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50" />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Fim</label>
-                <input type="time" required value={form.hora_fim} onChange={e => setForm({...form, hora_fim: e.target.value})} className="mt-1 w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Retorno</label>
+                <input type="time" required value={form.hora_fim} onChange={e => setForm({...form, hora_fim: e.target.value})} className="mt-1 w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50" />
               </div>
             </div>
+
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase">Rota / Obs</label>
-              <input type="text" required value={form.rota} onChange={e => setForm({...form, rota: e.target.value})} className="mt-1 w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Ex: Rota Sul" />
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Descrição da Rota</label>
+              <input type="text" required value={form.rota} onChange={e => setForm({...form, rota: e.target.value})} className="mt-1 w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50/50" placeholder="Ex: Rota Joinville Sul" />
             </div>
+
             <div className="md:col-span-2 grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase text-blue-600">KM Inicial</label>
+                <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest">KM Inicial</label>
                 <div className="relative mt-1">
-                  <Gauge className="absolute left-3 top-2.5 text-blue-400" size={18} />
-                  <input type="number" value={form.km_inicial} onChange={e => setForm({...form, km_inicial: e.target.value})} className="w-full pl-10 p-2 border border-blue-100 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  <Gauge className="absolute left-3 top-3.5 text-blue-400" size={18} />
+                  <input type="number" value={form.km_inicial} onChange={e => setForm({...form, km_inicial: e.target.value})} className="w-full pl-10 p-3 border border-blue-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30" />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase text-emerald-600">KM Final</label>
+                <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">KM Final</label>
                 <div className="relative mt-1">
-                  <Gauge className="absolute left-3 top-2.5 text-emerald-400" size={18} />
-                  <input type="number" value={form.km_final} onChange={e => setForm({...form, km_final: e.target.value})} className="w-full pl-10 p-2 border border-emerald-100 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500" />
+                  <Gauge className="absolute left-3 top-3.5 text-emerald-400" size={18} />
+                  <input type="number" value={form.km_final} onChange={e => setForm({...form, km_final: e.target.value})} className="w-full pl-10 p-3 border border-emerald-100 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/30" />
                 </div>
               </div>
             </div>
-            <div className="md:col-span-4 flex justify-end mt-2">
-              <button disabled={loading} className={`font-bold py-2 px-8 rounded-lg text-white shadow-md ${editandoId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                {loading ? 'Salvando...' : editandoId ? 'Atualizar Registro' : 'Registrar Rota'}
+
+            <div className="md:col-span-4 flex justify-end">
+              <button disabled={loading} className={`font-black uppercase tracking-widest py-4 px-10 rounded-xl text-white shadow-xl transition-all active:scale-95 ${editandoId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                {loading ? 'Sincronizando...' : editandoId ? 'Confirmar Alteração' : 'Registrar Rota'}
               </button>
             </div>
           </form>
@@ -286,28 +319,30 @@ export default function Home() {
 
         {/* FECHAMENTO MENSAL */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2"><BarChart3 className="text-emerald-500" size={24} /> Fechamento Mensal</h2>
+          <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <h2 className="text-lg font-black uppercase tracking-tight flex items-center gap-2"><BarChart3 className="text-emerald-500" size={24} /> Resumo Mensal</h2>
             <div className="flex items-center gap-3 w-full md:w-auto">
-              <input type="month" value={mesResumo} onChange={e => setMesResumo(e.target.value)} className="p-2 border rounded-lg text-sm bg-white" />
-              <button onClick={exportarPDF} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                <FileDown size={18} /> Exportar PDF
+              <input type="month" value={mesResumo} onChange={e => setMesResumo(e.target.value)} className="p-2.5 border border-slate-200 rounded-xl text-sm font-bold bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500" />
+              <button onClick={exportarPDF} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 shadow-emerald-500/20">
+                <FileDown size={18} /> PDF
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-center items-center text-center">
-              <span className="text-sm font-medium text-slate-500">Total de Horas no Mês</span>
-              <span className="text-4xl font-bold text-emerald-600">{formatarMinutosParaHoras(totalMinutosMes)}</span>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-8 rounded-3xl border border-slate-200 flex flex-col justify-center items-center text-center shadow-inner">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Total Acumulado</span>
+              <span className="text-5xl font-black text-emerald-600 tracking-tighter">{formatarMinutosParaHoras(totalMinutosMes)}</span>
             </div>
-            <div className="max-h-48 overflow-y-auto pr-2 space-y-2">
+            
+            <div className="max-h-56 overflow-y-auto pr-3 space-y-2 custom-scrollbar">
               {diasOrdenados.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8">Nenhuma hora registrada.</p>
+                <p className="text-sm text-slate-400 text-center py-12 italic">Nenhum registro neste mês.</p>
               ) : (
                 diasOrdenados.map(([data, mins]: any) => (
-                  <div key={data} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-lg text-sm">
-                    <span className="font-medium text-slate-600">{formatarData(data)}</span>
-                    <span className="font-semibold text-slate-800 bg-slate-100 px-3 py-1 rounded-md">{formatarMinutosParaHoras(mins)}</span>
+                  <div key={data} className="flex justify-between items-center p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-blue-200 transition-colors">
+                    <span className="font-bold text-slate-600">{formatarData(data)}</span>
+                    <span className="font-black text-blue-600 bg-blue-50 px-4 py-1.5 rounded-xl text-xs">{formatarMinutosParaHoras(mins)}</span>
                   </div>
                 ))
               )}
@@ -317,33 +352,33 @@ export default function Home() {
 
         {/* HISTÓRICO */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-700 mb-6">Histórico Recente</h2>
-          <div className="space-y-3">
+          <h2 className="text-lg font-black uppercase tracking-tight text-slate-700 mb-8">Histórico de Atividades</h2>
+          <div className="space-y-4">
             {registros.length === 0 ? (
-              <p className="text-center text-slate-500 py-8">Nenhum registro encontrado.</p>
+              <p className="text-center text-slate-400 py-12 italic border-2 border-dashed border-slate-100 rounded-3xl">Clique em "Registrar Rota" para começar.</p>
             ) : (
               registros.map((reg: any) => (
-                <div key={reg.id} className="flex flex-col sm:flex-row justify-between items-center p-4 hover:bg-slate-50 border border-slate-100 rounded-xl gap-4">
-                  <div className="flex items-center gap-4 w-full">
-                    <div className="bg-blue-50 text-blue-700 p-3 rounded-lg flex flex-col items-center justify-center min-w-[100px]">
-                      <span className="text-[10px] font-bold text-blue-500 uppercase">Van {reg.numero_van}</span>
-                      <span className="font-bold text-lg">{calcularDuracao(reg.hora_inicio, reg.hora_fim)}</span>
+                <div key={reg.id} className="flex flex-col sm:flex-row justify-between items-center p-5 hover:bg-slate-50 border border-slate-100 rounded-2xl gap-4 transition-all hover:shadow-md group">
+                  <div className="flex items-center gap-5 w-full">
+                    <div className="bg-blue-600 text-white p-4 rounded-2xl flex flex-col items-center justify-center min-w-[110px] shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                      <span className="text-[10px] font-black uppercase tracking-tighter opacity-80">Van {reg.numero_van}</span>
+                      <span className="font-black text-xl tracking-tighter">{calcularDuracao(reg.hora_inicio, reg.hora_fim)}</span>
                     </div>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                         <p className="font-bold text-slate-800">{reg.rota}</p>
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                         <p className="font-black text-slate-800 uppercase tracking-tight">{reg.rota}</p>
                          {reg.km_final && reg.km_inicial && (
-                           <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
+                           <span className="text-[10px] bg-emerald-500 text-white px-2.5 py-1 rounded-full font-black uppercase tracking-widest shadow-sm">
                              {Number(reg.km_final) - Number(reg.km_inicial)} KM
                            </span>
                          )}
                       </div>
-                      <p className="text-xs text-slate-500">{formatarData(reg.data)} • {reg.hora_inicio} às {reg.hora_fim}</p>
+                      <p className="text-xs font-bold text-slate-400 tracking-wide uppercase">{formatarData(reg.data)} • <span className="text-blue-500">{reg.hora_inicio} ➞ {reg.hora_fim}</span></p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => iniciarEdicao(reg)} className="p-2 text-slate-400 hover:text-amber-600"><Pencil size={18} /></button>
-                    <button onClick={() => deletarRegistro(reg.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 size={18} /></button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => iniciarEdicao(reg)} className="p-3 bg-slate-100 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all shadow-sm"><Pencil size={20} /></button>
+                    <button onClick={() => deletarRegistro(reg.id)} className="p-3 bg-slate-100 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all shadow-sm"><Trash2 size={20} /></button>
                   </div>
                 </div>
               ))
