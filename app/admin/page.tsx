@@ -20,7 +20,6 @@ export default function AdminPanel() {
   const [precoDiesel, setPrecoDiesel] = useState(6.00);
   const [loading, setLoading] = useState(true);
 
-  // Filtros e Formulários
   const [usuarioSelecionado, setUsuarioSelecionado] = useState('');
   const [vanSelecionada, setVanSelecionada] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -49,43 +48,54 @@ export default function AdminPanel() {
 
   useEffect(() => { carregarDadosAdmin(); }, [carregarDadosAdmin]);
 
-  // FUNÇÕES DE ENVIO DOS FORMULÁRIOS
   const handleCriarEmpresa = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    console.log("Botão Criar Empresa clicado!");
     const formData = new FormData(e.currentTarget);
-    const res = await fetch('/api/admin/empresas', {
-      method: 'POST',
-      body: JSON.stringify({
-        nomeEmpresa: formData.get('nomeEmpresa'),
-        emailDono: formData.get('emailDono'),
-      })
-    });
-    if (res.ok) {
-      alert('Empresa e Dono criados com sucesso!');
-      (e.target as HTMLFormElement).reset();
-      carregarDadosAdmin();
-    } else {
-      alert('Erro ao criar empresa. Verifique se a API existe.');
+    const payload = {
+      nomeEmpresa: formData.get('nomeEmpresa'),
+      emailDono: formData.get('emailDono'),
+    };
+    console.log("Dados sendo enviados:", payload);
+
+    try {
+      const res = await fetch('/api/admin/empresas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        alert('Empresa e Dono criados!');
+        (e.target as HTMLFormElement).reset();
+        carregarDadosAdmin();
+      } else {
+        const errData = await res.json();
+        alert(`Erro da API: ${errData.error || 'Desconhecido'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro de rede ou API inexistente.');
     }
   };
 
   const handleAutorizarUsuario = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const res = await fetch('/api/admin/usuarios', {
-      method: 'POST',
-      body: JSON.stringify({
-        email: formData.get('email'),
-        role: formData.get('role'),
-      })
-    });
-    if (res.ok) {
-      alert('Membro autorizado com sucesso!');
-      (e.target as HTMLFormElement).reset();
-      carregarDadosAdmin();
-    } else {
-      alert('Erro ao autorizar usuário.');
-    }
+    try {
+      const res = await fetch('/api/admin/usuarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.get('email'),
+          role: formData.get('role'),
+        })
+      });
+      if (res.ok) {
+        alert('Membro autorizado!');
+        (e.target as HTMLFormElement).reset();
+        carregarDadosAdmin();
+      }
+    } catch (err) { alert('Erro ao autorizar.'); }
   };
 
   const salvarVeiculo = async (e: React.FormEvent) => {
@@ -98,7 +108,7 @@ export default function AdminPanel() {
     if (res.ok) {
       setFormVeiculo({ id: null, numero_van: '', placa: '', nome: '', media: '10' });
       carregarDadosAdmin();
-      alert("Veículo salvo!");
+      alert("Sucesso!");
     }
   };
 
@@ -112,7 +122,7 @@ export default function AdminPanel() {
   };
 
   const deletarUsuario = async (id: number) => {
-    if (!confirm('Remover este usuário?')) return;
+    if (!confirm('Excluir usuário?')) return;
     const res = await fetch(`/api/admin/usuarios?id=${id}`, { method: 'DELETE' });
     if (res.ok) carregarDadosAdmin();
   };
@@ -155,7 +165,7 @@ export default function AdminPanel() {
     return acc;
   }, { kmTotal: 0, custoTotal: 0 });
 
-  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white font-mono tracking-widest uppercase italic">Sincronizando Plataforma SaaS...</div>;
+  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white">Carregando...</div>;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-8 text-xs">
@@ -174,7 +184,7 @@ export default function AdminPanel() {
 
         {abaAtiva === 'relatorios' && (
           <div className="space-y-6 animate-in fade-in duration-500">
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
               <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
                 <p className="text-[10px] uppercase font-bold text-slate-500">Horas Totais</p>
                 <h2 className="text-2xl font-bold text-blue-400">{somarMinutos()}</h2>
@@ -261,8 +271,6 @@ export default function AdminPanel() {
 
         {abaAtiva === 'equipe' && (
           <div className="animate-in slide-in-from-bottom-2 duration-500 space-y-6">
-            
-            {/* PAINEL SUPER ADMIN EXCLUSIVO */}
             {session?.user?.email === 'gfxdjo@gmail.com' && (
               <div className="bg-blue-900/10 p-6 rounded-2xl border border-blue-500/30 shadow-2xl border-dashed">
                 <div className="flex items-center gap-2 mb-4">
@@ -272,11 +280,11 @@ export default function AdminPanel() {
                 <form onSubmit={handleCriarEmpresa} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                   <div>
                     <label className="text-[10px] font-bold text-blue-300 uppercase">Nome da Empresa</label>
-                    <input name="nomeEmpresa" required className="w-full bg-slate-950 p-2 rounded border border-blue-500/20 mt-1 outline-none text-white" placeholder="Ex: Transportes Joinville" />
+                    <input name="nomeEmpresa" required className="w-full bg-slate-950 p-2 rounded border border-blue-500/20 mt-1 outline-none text-white" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-blue-300 uppercase">E-mail do Dono</label>
-                    <input name="emailDono" type="email" required className="w-full bg-slate-950 p-2 rounded border border-blue-500/20 mt-1 outline-none text-white" placeholder="dono@gmail.com" />
+                    <input name="emailDono" type="email" required className="w-full bg-slate-950 p-2 rounded border border-blue-500/20 mt-1 outline-none text-white" />
                   </div>
                   <button type="submit" className="bg-blue-600 p-2 rounded-lg font-bold hover:bg-blue-500 transition-all text-white shadow-lg active:scale-95">Criar Nova Instância</button>
                 </form>
@@ -286,12 +294,12 @@ export default function AdminPanel() {
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
               <div className="flex items-center gap-2 mb-4">
                 <UserPlus size={18} className="text-blue-400" />
-                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400">Autorizar Membro (Empresa Atual)</h3>
+                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400">Autorizar Membro</h3>
               </div>
               <form onSubmit={handleAutorizarUsuario} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase">E-mail do Google</label>
-                  <input name="email" type="email" required className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white" placeholder="exemplo@gmail.com" />
+                  <input name="email" type="email" required className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Função</label>
