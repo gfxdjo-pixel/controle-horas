@@ -4,14 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession, signIn, signOut } from "next-auth/react";
 import { 
   Clock, 
-  Calendar, 
   BarChart3, 
   Pencil, 
   Trash2, 
   X, 
   LogOut, 
   FileDown, 
-  Users, 
   Truck, 
   Gauge, 
   LayoutDashboard,
@@ -174,6 +172,7 @@ export default function Home() {
     const doc = new jsPDF('l', 'mm', 'a4');
     doc.setFontSize(18);
     doc.text('Relatório de Horas e KM', 14, 22);
+    
     doc.setFontSize(11);
     doc.setTextColor(100);
     doc.text(`Colaborador: ${session?.user?.name}`, 14, 30);
