@@ -62,6 +62,33 @@ export async function POST(req: Request) {
   }
 }
 
+// NOVA FUNÇÃO: Permite a edição (Update) dos registros
+export async function PUT(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+    const { id, data, hora_inicio, hora_fim, rota, numero_van, km_inicial, km_final } = await req.json();
+
+    await sql`
+      UPDATE horas_extras SET 
+        data = ${data}, 
+        hora_inicio = ${hora_inicio}, 
+        hora_fim = ${hora_fim}, 
+        rota = ${rota},
+        numero_van = ${numero_van},
+        km_inicial = ${km_inicial},
+        km_final = ${km_final}
+      WHERE id = ${id}
+    `;
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Erro no PUT horas:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
