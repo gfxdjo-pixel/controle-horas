@@ -10,43 +10,43 @@ export const authOptions: AuthOptions = {
     }),
   ],
   callbacks: {
-    // 1. Quando o usuário loga, buscamos a empresa dele no banco de dados
-    async session({ session, token }: any) {
-      if (session.user) {
+    // 1. O JWT roda apenas quando o token é criado ou atualizado.
+    // É aqui que devemos fazer a busca no banco (mais rápido e seguro).
+    async jwt({ token, user }: any) {
+      if (user || token.email) {
         try {
-          // Buscamos o empresa_id e o cargo (role) na tabela que você criou
           const { rows } = await sql`
             SELECT empresa_id, role 
             FROM perfis_usuarios 
-            WHERE email = ${session.user.email}
+            WHERE email = ${token.email}
           `;
 
           if (rows.length > 0) {
-            // Injetamos esses dados na sessão para ficarem disponíveis no Front-end e nas APIs
-            session.user.empresa_id = rows[0].empresa_id;
-            session.user.role = rows[0].role;
+            token.empresa_id = rows[0].empresa_id;
+            token.role = rows[0].role;
           } else {
-            // Caso o usuário não esteja na tabela, definimos como null ou um valor padrão
-            session.user.empresa_id = null;
-            session.user.role = 'user';
+            token.empresa_id = null;
+            token.role = 'user';
           }
         } catch (error) {
-          console.error("Erro ao buscar perfil do usuário:", error);
+          console.error("Erro ao buscar perfil do usuário no JWT:", error);
         }
       }
-      return session;
-    },
-    // 2. Necessário para passar os dados do banco para a sessão
-    async jwt({ token, user, account }: any) {
       return token;
+    },
+    // 2. A sessão apenas "lê" os dados que o JWT já buscou no banco.
+    async session({ session, token }: any) {
+      if (session.user) {
+        session.user.empresa_id = token.empresa_id;
+        session.user.role = token.role;
+      }
+      return session;
     }
   },
-  // Aumenta a segurança e ajuda na persistência da sessão
   session: {
     strategy: "jwt",
   },
 };
 
 const handler = NextAuth(authOptions);
-
 export { handler as GET, handler as POST };

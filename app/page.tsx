@@ -46,7 +46,7 @@ export default function Home() {
   const podeAcessarGestao = isSuperAdmin || isAdmin;
 
   const carregarDados = useCallback(async () => {
-    let url = '/api/horas';
+    let url = '/api/admin/horas';
     if (filtro.inicio && filtro.fim) {
       url += `?inicio=${filtro.inicio}&fim=${filtro.fim}`;
     }
@@ -74,7 +74,7 @@ export default function Home() {
       const metodo = editandoId ? 'PUT' : 'POST';
       const corpoDaRequisicao = editandoId ? { id: editandoId, ...form } : form;
 
-      const res = await fetch('/api/horas', {
+      const res = await fetch('/api/admin/horas', {
         method: metodo,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(corpoDaRequisicao),
@@ -116,7 +116,7 @@ export default function Home() {
   const deletarRegistro = async (id: number) => {
     if (confirm('Tem certeza que deseja excluir esta rota permanentemente?')) {
       try {
-        const res = await fetch(`/api/horas?id=${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/admin/horas?id=${id}`, { method: 'DELETE' });
         if (res.ok) {
           carregarDados();
         } else {

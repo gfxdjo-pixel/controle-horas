@@ -14,22 +14,15 @@ export async function GET(req: Request) {
     // @ts-ignore
     const role = session.user?.role;
 
+    // FORÇA A EXISTÊNCIA DA COLUNA CASO O SQL TENHA FALHADO
+    await sql`ALTER TABLE horas_extras ADD COLUMN IF NOT EXISTS empresa_id INTEGER`;
+
     let rows;
     if (role === 'admin') {
-      // Admin vê tudo da empresa dele
-      const result = await sql`
-        SELECT * FROM horas_extras 
-        WHERE empresa_id = ${empresaId}
-        ORDER BY data DESC, hora_inicio DESC
-      `;
+      const result = await sql`SELECT * FROM horas_extras WHERE empresa_id = ${empresaId} ORDER BY data DESC, hora_inicio DESC`;
       rows = result.rows;
     } else {
-      // Motorista vê apenas o dele
-      const result = await sql`
-        SELECT * FROM horas_extras 
-        WHERE user_email = ${email} AND empresa_id = ${empresaId}
-        ORDER BY data DESC, hora_inicio DESC
-      `;
+      const result = await sql`SELECT * FROM horas_extras WHERE user_email = ${email} AND empresa_id = ${empresaId} ORDER BY data DESC, hora_inicio DESC`;
       rows = result.rows;
     }
     
@@ -49,7 +42,7 @@ export async function POST(req: Request) {
     // @ts-ignore
     const empresaId = session.user?.empresa_id;
 
-    // Garante que a coluna existe antes de tentar inserir
+    // GARANTE QUE A COLUNA EXISTE ANTES DO INSERT
     await sql`ALTER TABLE horas_extras ADD COLUMN IF NOT EXISTS empresa_id INTEGER`;
 
     await sql`
@@ -64,6 +57,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("Erro no POST horas:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
