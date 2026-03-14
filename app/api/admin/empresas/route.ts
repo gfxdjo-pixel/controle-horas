@@ -6,17 +6,35 @@ import { authOptions } from "../../auth/[...nextauth]/route";
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    
-    // Verificação de segurança (Garanta que este é seu e-mail de login)
     const emailAdmin = session?.user?.email?.toLowerCase();
     
+    // Verificação de segurança
     if (emailAdmin !== 'gfxdjo@gmail.com') {
-      return NextResponse.json({ error: `Acesso negado para: ${emailAdmin}` }, { status: 403 });
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
     }
 
     const { nomeEmpresa, emailDono } = await req.json();
 
-    // 1. Criar empresa
+    // GARANTIA: Tenta criar a tabela antes de inserir (evita o erro 'relation does not exist')
+    await sql`
+      CREATE TABLE IF NOT EXISTS empresas (
+        id SERIAL PRIMARY KEY,
+        nome_empresa TEXT NOT NULL,
+        plano TEXT DEFAULT 'pro',
+        data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS perfis_usuarios (
+        id SERIAL PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        empresa_id INTEGER REFERENCES empresas(id),
+        role TEXT DEFAULT 'admin'
+      );
+    `;
+
+    // 1. Inserir Empresa
     const resultEmpresa = await sql`
       INSERT INTO empresas (nome_empresa) 
       VALUES (${nomeEmpresa}) 
@@ -25,7 +43,7 @@ export async function POST(req: Request) {
     
     const novaEmpresaId = resultEmpresa.rows[0].id;
 
-    // 2. Criar perfil do dono
+    // 2. Inserir Dono
     await sql`
       INSERT INTO perfis_usuarios (email, empresa_id, role)
       VALUES (${emailDono.toLowerCase()}, ${novaEmpresaId}, 'admin')
