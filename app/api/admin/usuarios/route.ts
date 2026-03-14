@@ -9,11 +9,7 @@ export async function GET() {
   const empresaId = session?.user?.empresa_id;
 
   try {
-    const result = await sql`
-      SELECT * FROM perfis_usuarios 
-      WHERE empresa_id = ${empresaId} 
-      ORDER BY role ASC, email ASC
-    `;
+    const result = await sql`SELECT * FROM perfis_usuarios WHERE empresa_id = ${empresaId} ORDER BY email ASC`;
     return NextResponse.json(result.rows);
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }
@@ -22,17 +18,13 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   // @ts-ignore
   const empresaId = session?.user?.empresa_id;
-  const { email, role, novoEmpresaId } = await req.json();
-
-  // Se for você (Super Admin) criando um novo dono de empresa, usamos o novoEmpresaId enviado
-  // Caso contrário, um dono criando motorista usa o seu próprio empresaId
-  const idParaVincular = novoEmpresaId || empresaId;
+  const { email, role } = await req.json();
 
   try {
     await sql`
       INSERT INTO perfis_usuarios (email, empresa_id, role)
-      VALUES (${email.toLowerCase()}, ${idParaVincular}, ${role})
-      ON CONFLICT (email) DO UPDATE SET role = ${role}, empresa_id = ${idParaVincular}
+      VALUES (${email.toLowerCase()}, ${empresaId}, ${role})
+      ON CONFLICT (email) DO UPDATE SET role = ${role}, empresa_id = ${empresaId}
     `;
     return NextResponse.json({ success: true });
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
