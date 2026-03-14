@@ -12,7 +12,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function AdminPanel() {
-  const { data: session }: any = useSession();
+  // Tipagem 'any' para evitar os erros de sublinhado vermelho no VS Code
+  const { data: session, status }: any = useSession();
   const [abaAtiva, setAbaAtiva] = useState('relatorios');
   const [todosRegistros, setTodosRegistros] = useState<any[]>([]);
   const [veiculos, setVeiculos] = useState<any[]>([]);
@@ -28,8 +29,10 @@ export default function AdminPanel() {
   const [dataFim, setDataFim] = useState('');
   const [formVeiculo, setFormVeiculo] = useState({ id: null as any, numero_van: '', placa: '', nome: '', media: '10' });
 
+  // Verificação Master - Forçamos a verificação pelo e-mail direto da sessão
   const isSuperAdmin = session?.user?.email === 'gfxdjo@gmail.com';
-  const userRole = session?.user?.role || 'user';
+  // Se for você, o role é admin por padrão para não te bloquear
+  const userRole = isSuperAdmin ? 'admin' : (session?.user?.role || 'user');
 
   const carregarDadosAdmin = useCallback(async () => {
     if (!session) return;
@@ -62,7 +65,11 @@ export default function AdminPanel() {
     }
   }, [session, isSuperAdmin]);
 
-  useEffect(() => { carregarDadosAdmin(); }, [carregarDadosAdmin]);
+  useEffect(() => { 
+    if (status === 'authenticated') {
+      carregarDadosAdmin(); 
+    }
+  }, [carregarDadosAdmin, status]);
 
   // --- FUNÇÕES DE AÇÃO ---
   const handleCriarEmpresa = async (e: any) => {
@@ -86,7 +93,7 @@ export default function AdminPanel() {
   };
 
   const deletarEmpresa = async (id: any) => {
-    if (!confirm('Excluir empresa e todos os seus dados permanentemente?')) return;
+    if (!confirm('Excluir empresa permanentemente?')) return;
     await fetch(`/api/admin/empresas?id=${id}`, { method: 'DELETE' });
     carregarDadosAdmin();
   };
@@ -184,20 +191,21 @@ export default function AdminPanel() {
     doc.save('relatorio-frota.pdf');
   };
 
-  if (userRole !== 'admin' && !loading) {
+  // TELA DE ACESSO RESTRITO
+  if (userRole !== 'admin' && !loading && status === 'authenticated') {
     return (
       <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center text-white p-4">
-        <Shield size={48} className="text-red-500 mb-4" />
-        <h1 className="text-xl font-bold">Acesso Restrito</h1>
-        <p className="text-slate-400 mt-2 text-center max-w-xs">Somente administradores autorizados.</p>
-        <button onClick={() => signOut()} className="mt-6 bg-slate-800 px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-slate-700">
-          <LogOut size={18} /> Sair
+        <Shield size={48} className="text-red-500 mb-4 animate-pulse" />
+        <h1 className="text-xl font-bold uppercase tracking-widest">Acesso Restrito</h1>
+        <p className="text-slate-400 mt-2 text-center max-w-xs font-mono text-[10px]">E-mail detectado: {session?.user?.email}</p>
+        <button onClick={() => signOut()} className="mt-6 bg-slate-800 px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-slate-700 transition-all active:scale-95 shadow-lg">
+          <LogOut size={18} /> Sair do Sistema
         </button>
       </div>
     );
   }
 
-  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white font-mono uppercase tracking-widest italic">Carregando Master SaaS...</div>;
+  if (loading || status === 'loading') return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-white font-mono uppercase tracking-widest italic">Autenticando no Master SaaS...</div>;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 p-4 md:p-8 text-xs">
@@ -208,7 +216,7 @@ export default function AdminPanel() {
             <h1 className="text-xl font-bold flex items-center gap-2"><Truck className="text-blue-400" /> Master Frota</h1>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto">
+            <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto max-w-full">
               {[
                 { id: 'relatorios', label: 'Relatórios' }, { id: 'frota', label: 'Frota' }, { id: 'equipe', label: 'Equipe' }, { id: 'config', label: 'Diesel' },
                 ...(isSuperAdmin ? [{ id: 'master', label: 'MASTER SaaS' }] : [])
@@ -216,11 +224,10 @@ export default function AdminPanel() {
                 <button key={aba.id} onClick={() => setAbaAtiva(aba.id)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${abaAtiva === aba.id ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>{aba.label}</button>
               ))}
             </div>
-            <button onClick={() => signOut()} className="p-2 text-slate-500 hover:text-red-500" title="Sair"><LogOut size={20}/></button>
+            <button onClick={() => signOut()} className="p-2 text-slate-500 hover:text-red-500 transition-colors" title="Sair"><LogOut size={20}/></button>
           </div>
         </header>
 
-        {/* ABA MASTER (EXCLUSIVA) */}
         {abaAtiva === 'master' && isSuperAdmin && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
             <div className="bg-blue-900/10 p-6 rounded-2xl border border-blue-500/30 shadow-2xl border-dashed">
@@ -251,22 +258,12 @@ export default function AdminPanel() {
           </div>
         )}
 
-        {/* ABA RELATÓRIOS */}
         {abaAtiva === 'relatorios' && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                <p className="text-[10px] uppercase font-bold text-slate-500">Horas Totais</p>
-                <h2 className="text-2xl font-bold text-blue-400">{somarMinutos()}</h2>
-              </div>
-              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                <p className="text-[10px] uppercase font-bold text-slate-500">KM Total</p>
-                <h2 className="text-2xl font-bold text-emerald-400">{kmTotal} KM</h2>
-              </div>
-              <div className="bg-slate-800/50 p-4 rounded-xl border border-amber-900/30">
-                <p className="text-[10px] uppercase font-bold text-amber-500">Custo Diesel (Est.)</p>
-                <h2 className="text-2xl font-bold text-amber-500">R$ {custoTotal.toFixed(2)}</h2>
-              </div>
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700"><p className="text-[10px] font-bold text-slate-500">HORAS TOTAIS</p><h2 className="text-2xl font-bold text-blue-400">{somarMinutos()}</h2></div>
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700"><p className="text-[10px] font-bold text-slate-500">KM TOTAL</p><h2 className="text-2xl font-bold text-emerald-400">{kmTotal} KM</h2></div>
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-amber-900/30"><p className="text-[10px] font-bold text-amber-500">CUSTO DIESEL (EST.)</p><h2 className="text-2xl font-bold text-amber-500">R$ {custoTotal.toFixed(2)}</h2></div>
             </div>
 
             <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700 flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -279,10 +276,10 @@ export default function AdminPanel() {
                     <option value="">Todas as Vans</option>
                     {veiculos.map(v => <option key={v.numero_van} value={v.numero_van}>Van {v.numero_van}</option>)}
                   </select>
-                  <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-300" />
-                  <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-300" />
+                  <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-300 shadow-inner" />
+                  <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-300 shadow-inner" />
                </div>
-               <button onClick={gerarPDF} className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg flex items-center gap-2 font-bold px-4 transition-all"><FileDown size={18} /> PDF</button>
+               <button onClick={gerarPDF} className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg flex items-center gap-2 font-bold px-4 transition-all shadow-md active:scale-95"><FileDown size={18} /> Exportar PDF</button>
             </div>
 
             <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden shadow-2xl">
@@ -309,15 +306,15 @@ export default function AdminPanel() {
         {abaAtiva === 'frota' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
             <form onSubmit={salvarVeiculo} className="bg-slate-800 p-6 rounded-2xl border border-slate-700 grid grid-cols-1 md:grid-cols-4 gap-4 items-end shadow-xl">
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Nº Van</label><input required value={formVeiculo.numero_van} onChange={e => setFormVeiculo({...formVeiculo, numero_van: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white shadow-inner" /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Placa</label><input value={formVeiculo.placa} onChange={e => setFormVeiculo({...formVeiculo, placa: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white shadow-inner" /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Média km/L</label><input required type="number" step="0.1" value={formVeiculo.media} onChange={e => setFormVeiculo({...formVeiculo, media: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white shadow-inner" /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nº Van</label><input required value={formVeiculo.numero_van} onChange={e => setFormVeiculo({...formVeiculo, numero_van: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white shadow-inner" /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Placa</label><input value={formVeiculo.placa} onChange={e => setFormVeiculo({...formVeiculo, placa: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white shadow-inner" /></div>
+              <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Média km/L</label><input required type="number" step="0.1" value={formVeiculo.media} onChange={e => setFormVeiculo({...formVeiculo, media: e.target.value})} className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white shadow-inner" /></div>
               <button type="submit" className="bg-blue-600 p-2 rounded-lg font-bold hover:bg-blue-700 active:scale-95 shadow-lg transition-all">Salvar Veículo</button>
             </form>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {veiculos.map(v => (
                 <div key={v.id} className="bg-slate-800/40 p-4 rounded-xl border border-slate-700 flex justify-between items-center group shadow-md hover:border-blue-500/30 transition-all">
-                  <div><h3 className="font-bold text-blue-400 text-lg">Van {v.numero_van}</h3><p className="text-[10px] text-slate-500 uppercase tracking-widest">{v.placa || 'SEM PLACA'}</p><div className="mt-2 text-emerald-500 text-[10px] font-bold">{v.media_consumo} km/L</div></div>
+                  <div><h3 className="font-bold text-blue-400 text-lg">Van {v.numero_van}</h3><p className="text-[10px] text-slate-500 uppercase tracking-widest">{v.placa || 'S/P'}</p><div className="mt-2 text-emerald-500 text-[10px] font-bold">{v.media_consumo} km/L</div></div>
                   <div className="flex gap-2">
                     <button onClick={() => setFormVeiculo({id: v.id, numero_van: v.numero_van, placa: v.placa, nome: v.nome_identificacao, media: String(v.media_consumo)})} className="p-2 text-slate-500 hover:text-amber-500 bg-slate-900/50 rounded-lg"><Pencil size={18} /></button>
                     <button onClick={async () => { if(confirm('Excluir?')) { await fetch(`/api/admin/veiculos?id=${v.id}`, {method:'DELETE'}); carregarDadosAdmin(); } }} className="p-2 text-slate-500 hover:text-red-500 bg-slate-900/50 rounded-lg"><Trash2 size={18} /></button>
@@ -335,7 +332,7 @@ export default function AdminPanel() {
               <form onSubmit={handleAutorizarUsuario} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div><label className="text-[10px] font-bold text-slate-500 uppercase">E-mail Google</label><input name="email" type="email" required className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white shadow-inner" /></div>
                 <div><label className="text-[10px] font-bold text-slate-500 uppercase">Cargo</label><select name="role" className="w-full bg-slate-900 p-2 rounded border border-slate-700 mt-1 outline-none text-white"><option value="user">Motorista</option><option value="admin">Administrador</option></select></div>
-                <button type="submit" className="bg-emerald-600 p-2 rounded-lg font-bold hover:bg-emerald-700 transition-all text-white shadow-lg">Autorizar Acesso</button>
+                <button type="submit" className="bg-emerald-600 p-2 rounded-lg font-bold hover:bg-emerald-700 transition-all text-white shadow-lg active:scale-95">Autorizar Acesso</button>
               </form>
             </div>
             <div className="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden shadow-2xl">
@@ -359,15 +356,15 @@ export default function AdminPanel() {
 
         {abaAtiva === 'config' && (
           <div className="bg-slate-800/50 p-10 rounded-3xl border border-slate-700 max-w-lg mx-auto text-center space-y-6 shadow-2xl mt-10 animate-in zoom-in-95 duration-500">
-            <div className="bg-amber-500/10 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto border border-amber-500/20"><Settings className="text-amber-500" size={40} /></div>
-            <h2 className="font-bold text-xl uppercase tracking-widest">Custo de Operação</h2>
+            <div className="bg-amber-500/10 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto border border-amber-500/20 shadow-inner"><Settings className="text-amber-500" size={40} /></div>
+            <h2 className="font-bold text-xl uppercase tracking-widest text-slate-100">Custo Combustível</h2>
             <div className="space-y-4">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Preço do Litro Diesel</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valor do Litro Diesel</label>
                 <div className="flex items-center gap-4 justify-center">
                   <span className="text-3xl font-bold text-slate-600">R$</span>
                   <input type="number" step="0.01" value={precoDiesel} onChange={e => setPrecoDiesel(Number(e.target.value))} className="bg-slate-900 text-4xl font-black text-amber-500 w-40 text-center p-3 rounded-2xl border border-slate-700 outline-none focus:ring-2 focus:ring-amber-500/50 shadow-inner transition-all" />
                 </div>
-                <button onClick={atualizarPrecoDiesel} className="w-full bg-amber-600 hover:bg-amber-700 p-4 rounded-2xl font-bold text-white shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"><Save size={20} /> Gravar Valor</button>
+                <button onClick={atualizarPrecoDiesel} className="w-full bg-amber-600 hover:bg-amber-700 p-4 rounded-2xl font-bold text-white shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"><Save size={20} /> Salvar Valor</button>
             </div>
           </div>
         )}
